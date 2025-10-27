@@ -164,4 +164,40 @@ function DataService:KnitInit()
 
 end
 
+function DataService:GetPlayerData(player: Player)
+    local session = self.getSession(player)
+    if session then
+        return session.Data
+    end
+    return nil
+end
+
+function DataService:UpdatePlayerData(player: Player, data)
+    local session = self.getSession(player)
+    if session then
+        session.Data = data
+        self:Replicate(player)
+        return true
+    end
+    return false
+end
+
+function DataService.Client:UseAbility(player: Player, slotName: string)
+    local session = DataService.getSession(player)
+    if not session or not session.Data.Abilities then
+        return false, "No player data found"
+    end
+
+    local abilitySlot = session.Data.Abilities[slotName]
+    if not abilitySlot or abilitySlot.Name == "" or abilitySlot.Quantity <= 0 then
+        return false, "No ability found in slot"
+    end
+
+    abilitySlot.Quantity -= 1
+    
+    DataService:Replicate(player, "Abilities")
+    
+    return true, "Success"
+end
+
 return DataService
