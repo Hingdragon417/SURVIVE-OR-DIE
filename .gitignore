@@ -1,0 +1,13 @@
+# Project place file
+/GAME TEMPLATE.rbxlx
+
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+# Wally
+/Packages/
+/wally.lock
+
+# Aftman
+/.aftman/
