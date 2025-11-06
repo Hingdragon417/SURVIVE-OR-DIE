@@ -11,6 +11,13 @@ local GeneratorService = Knit.CreateService({
     },
 })
 
+local MIN_HUMAN_REACTION_TIME = 0.1 -- 100ms minimum human reaction time
+local SUSPICIOUS_THRESHOLD = 3 -- Number of fast clicks before kicking
+local BUTTON_TIME_LIMIT = 2.5 -- Time limit for clicking buttons in seconds
+local playerSuspicionCount = {}
+local playerSlowClickCount = {}
+local SLOW_CLICK_ALERT_THRESHOLD = 1 -- Number of slow clicks before alerting
+
 local generatorProgress = {}
 local playerRoles = {}
 local generatorCooldowns = {}
@@ -40,6 +47,10 @@ end
 
 function GeneratorService:GetProgress(generatorId: string): number
     return generatorProgress[generatorId] or 0
+end
+
+function GeneratorService:GetButtonTimeLimit(): number
+    return BUTTON_TIME_LIMIT
 end
 
 function GeneratorService:IsOnCooldown(generatorId: string): boolean
@@ -94,11 +105,34 @@ function GeneratorService.Client:GetProgress(player: Player, generatorId: string
     return self.Server:GetProgress(generatorId)
 end
 
+function GeneratorService.Client:GetButtonTimeLimit(player: Player): number
+    return self.Server:GetButtonTimeLimit()
+end
+
 function GeneratorService.Client:IsOnCooldown(player: Player, generatorId: string): boolean
     return self.Server:IsOnCooldown(generatorId)
 end
 
-function GeneratorService.Client:AddProgress(player: Player, generatorId: string, amount: number)
+function GeneratorService.Client:AddProgress(player: Player, generatorId: string, amount: number, reactionTime: number)
+    if type(reactionTime) ~= "number" then
+        warn("[GeneratorService] Invalid reaction time from", player.Name)
+        return
+    end
+    
+    -- Track suspiciously fast reaction times
+    if reactionTime < MIN_HUMAN_REACTION_TIME then
+        playerSuspicionCount[player.UserId] = (playerSuspicionCount[player.UserId] or 0) + 1
+        warn("[GeneratorService] Suspicious reaction time from", player.Name, ":", reactionTime, "seconds")
+        
+        if playerSuspicionCount[player.UserId] >= SUSPICIOUS_THRESHOLD then
+            player:Kick("Suspicious activity detected: Reaction time too fast")
+            return
+        end
+    else
+        -- Reset suspicion count on normal reaction
+        playerSuspicionCount[player.UserId] = 0
+    end
+    
     if self.Server:IsOnCooldown(generatorId) then
         warn("[GeneratorService] Generator is on cooldown, rejecting interaction")
         return nil
@@ -132,12 +166,43 @@ function GeneratorService.Client:TriggerCooldown(player: Player, generatorId: st
     self.Server:StartCooldown(generatorId, generator)
 end
 
+function GeneratorService.Client:ReportSlowClick(player: Player, generatorId: string, timeLimit: number)
+    playerSlowClickCount[player.UserId] = (playerSlowClickCount[player.UserId] or 0) + 1
+    
+    warn("[GeneratorService] Player", player.Name, "failed to click within", timeLimit, "seconds")
+    
+    if playerSlowClickCount[player.UserId] >= SLOW_CLICK_ALERT_THRESHOLD then
+        -- Alert nearby players
+        if player.Character and player.Character.PrimaryPart then
+            local Players = game:GetService("Players")
+            for _, otherPlayer in Players:GetPlayers() do
+                if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character.PrimaryPart then
+                    local distance = (otherPlayer.Character.PrimaryPart.Position - player.Character.PrimaryPart.Position).Magnitude
+                    if distance <= 50 then
+                        createHighlight(
+                            player.Character,
+                            Color3.fromRGB(255, 255, 0),
+                            0.4,
+                            3
+                        )
+                    end
+                end
+            end
+        end
+        
+        -- Reset counter after alerting
+        playerSlowClickCount[player.UserId] = 0
+    end
+end
+
 function GeneratorService:KnitStart()
     local RoundService = Knit.GetService("RoundService")
     local Players = game:GetService("Players")
     
     Players.PlayerRemoving:Connect(function(player)
         playerRoles[player] = nil
+        playerSuspicionCount[player.UserId] = nil
+        playerSlowClickCount[player.UserId] = nil
     end)
     
     print("GeneratorService started")
