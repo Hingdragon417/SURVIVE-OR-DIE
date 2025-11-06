@@ -25,7 +25,7 @@ local progressUpdatedConnection = nil
 local generatorCooldownConnection = nil
 local initialPosition = nil
 local generatorCooldowns = {}
-local buttonTimeLimit = 2.5 -- Cache the time limit from server
+local buttonTimeLimit = 2.5
 
 local function clearButtons()
     for _, button in ipairs(activeButtons) do
@@ -96,14 +96,12 @@ local function spawnButton(clickBox: Frame)
     
     local timeLimit = buttonTimeLimit
     
-    -- Update timer display
     local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
     if generatorFrame then
         local timerLabel = generatorFrame:FindFirstChild("Timer")
         if timerLabel and timerLabel:IsA("TextLabel") then
             timerLabel.Text = string.format("Click on the circles but don't miss! (%.1fs)", timeLimit)
             
-            -- Start countdown
             local startTime = tick()
             local updateConnection
             updateConnection = game:GetService("RunService").Heartbeat:Connect(function()
@@ -119,13 +117,10 @@ local function spawnButton(clickBox: Frame)
         end
     end
     
-    -- Start countdown timer
     task.delay(timeLimit, function()
         if not buttonClicked and button.Parent then
-            -- Player failed to click in time
             GeneratorService:ReportSlowClick(currentGenerator, timeLimit)
             
-            -- Trigger cooldown for missing the click
             if currentGenerator and currentGeneratorObject then
                 if not generatorCooldowns[currentGenerator] then
                     local generatorModel = currentGeneratorObject.Parent
@@ -143,7 +138,6 @@ local function spawnButton(clickBox: Frame)
                 button:Destroy()
             end)
             
-            -- Close the generator UI
             GeneratorController:CloseGenerator()
         end
     end)
@@ -214,6 +208,25 @@ local function updateProgressBar(progress: number)
     tween:Play()
 end
 
+local function setProgressBarImmediate(progress: number)
+    local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
+    if not generatorFrame then return end
+    
+    local content = generatorFrame:FindFirstChild("Content")
+    if not content then return end
+    
+    local backgroundProgress = content:FindFirstChild("BackgroundProgress")
+    if not backgroundProgress then return end
+    
+    local progressFrame = backgroundProgress:FindFirstChild("Progress")
+    if not progressFrame then return end
+    
+    if type(progress) ~= "number" then return end
+    
+    local targetScale = math.clamp(progress / 100, 0, 1)
+    progressFrame.Size = UDim2.new(targetScale, 0, 1, 0)
+end
+
 local function triggerCooldownAndClose()
     if currentGenerator and currentGeneratorObject then
         if not generatorCooldowns[currentGenerator] then
@@ -251,13 +264,35 @@ end
 function GeneratorController:StartGenerator(generatorObject: Instance)
     local generatorId = generatorObject:GetFullName()
     
-    if generatorCooldowns[generatorId] then
-        warn("[GeneratorController] Generator is on cooldown, cannot access")
+    if generatorCooldowns[generatorId] == true then
+        warn("[GeneratorController] Generator", generatorId, "is on cooldown, cannot access")
         local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
         if generatorFrame then
             generatorFrame.Visible = false
         end
         return
+    end
+    
+    if currentGenerator and currentGenerator ~= generatorId then
+        self:CloseGenerator()
+    end
+    
+    local success1, initialProgress = pcall(function()
+        return GeneratorService:GetProgress(generatorId)
+    end)
+    
+    local success2, timeLimit = pcall(function()
+        return GeneratorService:GetButtonTimeLimit()
+    end)
+    
+    if not success1 then
+        warn("[GeneratorController] Failed to get progress:", initialProgress)
+        initialProgress = 0
+    end
+    
+    if not success2 then
+        warn("[GeneratorController] Failed to get time limit:", timeLimit)
+        timeLimit = 2.5
     end
     
     currentGenerator = generatorId
@@ -275,24 +310,23 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
     clearButtons()
     disconnectListeners()
     
-    task.spawn(function()
-        local initialProgress = GeneratorService:GetProgress(currentGenerator)
-        if type(initialProgress) == "number" then
-            updateProgressBar(initialProgress)
-        elseif type(initialProgress) == "table" and initialProgress.progress then
-            updateProgressBar(initialProgress.progress)
-        end
-        
-        -- Get button time limit from server
-        local timeLimit = GeneratorService:GetButtonTimeLimit()
-        if type(timeLimit) == "number" then
-            buttonTimeLimit = timeLimit
-        elseif type(timeLimit) == "table" and timeLimit.timeLimit then
-            buttonTimeLimit = timeLimit.timeLimit
-        else
-            buttonTimeLimit = 2.5 -- Fallback
-        end
-    end)
+    generatorFrame.Visible = true
+    
+    task.wait()
+    
+    if type(initialProgress) == "number" then
+        setProgressBarImmediate(initialProgress)
+    elseif type(initialProgress) == "table" and initialProgress.progress then
+        setProgressBarImmediate(initialProgress.progress)
+    end
+    
+    if type(timeLimit) == "number" then
+        buttonTimeLimit = timeLimit
+    elseif type(timeLimit) == "table" and type(timeLimit.timeLimit) == "number" then
+        buttonTimeLimit = timeLimit.timeLimit
+    else
+        buttonTimeLimit = 2.5
+    end
     
     spawnButton(clickBox)
     
@@ -385,15 +419,38 @@ function GeneratorController:CloseGenerator()
     currentGenerator = nil
     currentGeneratorObject = nil
     initialPosition = nil
-    buttonTimeLimit = 3 -- Reset to default
+    buttonTimeLimit = 2.5
+end
+
+function GeneratorController:SetProgressBarAfterUIReady(progress)
+    if type(progress) == "number" then
+        setProgressBarImmediate(progress)
+    end
 end
 
 function GeneratorController:KnitStart()
     GeneratorService.GeneratorCooldown:Connect(function(generatorId: string, onCooldown: boolean)
-        generatorCooldowns[generatorId] = onCooldown
+        if onCooldown then
+            generatorCooldowns[generatorId] = true
+        else
+            generatorCooldowns[generatorId] = nil
+        end
         
         if onCooldown and generatorId == currentGenerator then
             GeneratorController:CloseGenerator()
+        end
+    end)
+    
+    GeneratorService.ProgressSync:Connect(function(generatorId: string, progress: number)
+        if generatorId == currentGenerator then
+            local progressValue = progress
+            if type(progress) == "table" and progress.progress then
+                progressValue = progress.progress
+            end
+            
+            if type(progressValue) == "number" then
+                setProgressBarImmediate(progressValue)
+            end
         end
     end)
     

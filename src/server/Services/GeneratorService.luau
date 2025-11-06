@@ -8,19 +8,21 @@ local GeneratorService = Knit.CreateService({
     Client = {
         ProgressUpdated = Knit.CreateSignal(),
         GeneratorCooldown = Knit.CreateSignal(),
+        ProgressSync = Knit.CreateSignal(),
     },
 })
 
-local MIN_HUMAN_REACTION_TIME = 0.1 -- 100ms minimum human reaction time
-local SUSPICIOUS_THRESHOLD = 3 -- Number of fast clicks before kicking
-local BUTTON_TIME_LIMIT = 2.5 -- Time limit for clicking buttons in seconds
+local MIN_HUMAN_REACTION_TIME = 0.1
+local SUSPICIOUS_THRESHOLD = 3
+local BUTTON_TIME_LIMIT = 2.5
 local playerSuspicionCount = {}
 local playerSlowClickCount = {}
-local SLOW_CLICK_ALERT_THRESHOLD = 1 -- Number of slow clicks before alerting
+local SLOW_CLICK_ALERT_THRESHOLD = 1
 
 local generatorProgress = {}
 local playerRoles = {}
 local generatorCooldowns = {}
+local playerGeneratorLocks = {}
 
 local function createHighlight(parent: Instance, fillColor: Color3, fillTransparency: number, duration: number)
     local highlight = Instance.new("Highlight")
@@ -98,6 +100,12 @@ function GeneratorService:StartCooldown(generatorId: string, generator: Instance
     task.delay(5, function()
         generatorCooldowns[generatorId] = nil
         self.Client.GeneratorCooldown:FireAll(generatorId, false)
+        
+        for playerId, genId in pairs(playerGeneratorLocks) do
+            if genId == generatorId then
+                playerGeneratorLocks[playerId] = nil
+            end
+        end
     end)
 end
 
@@ -119,7 +127,15 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
         return
     end
     
-    -- Track suspiciously fast reaction times
+    if playerGeneratorLocks[player.UserId] and playerGeneratorLocks[player.UserId] ~= generatorId then
+        warn("[GeneratorService] Player", player.Name, "is trying to progress a different generator than they started")
+        return nil
+    end
+    
+    if not playerGeneratorLocks[player.UserId] then
+        playerGeneratorLocks[player.UserId] = generatorId
+    end
+    
     if reactionTime < MIN_HUMAN_REACTION_TIME then
         playerSuspicionCount[player.UserId] = (playerSuspicionCount[player.UserId] or 0) + 1
         warn("[GeneratorService] Suspicious reaction time from", player.Name, ":", reactionTime, "seconds")
@@ -129,7 +145,6 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
             return
         end
     else
-        -- Reset suspicion count on normal reaction
         playerSuspicionCount[player.UserId] = 0
     end
     
@@ -151,7 +166,7 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
     self.ProgressUpdated:FireAll(generatorId, newProgress)
     
     if newProgress >= 100 then
-        print("[GeneratorService] Generator", generatorId, "completed!")
+        playerGeneratorLocks[player.UserId] = nil
     end
     
     return newProgress
@@ -163,6 +178,8 @@ function GeneratorService.Client:TriggerCooldown(player: Player, generatorId: st
         return
     end
     
+    playerGeneratorLocks[player.UserId] = nil
+    
     self.Server:StartCooldown(generatorId, generator)
 end
 
@@ -172,7 +189,6 @@ function GeneratorService.Client:ReportSlowClick(player: Player, generatorId: st
     warn("[GeneratorService] Player", player.Name, "failed to click within", timeLimit, "seconds")
     
     if playerSlowClickCount[player.UserId] >= SLOW_CLICK_ALERT_THRESHOLD then
-        -- Alert nearby players
         if player.Character and player.Character.PrimaryPart then
             local Players = game:GetService("Players")
             for _, otherPlayer in Players:GetPlayers() do
@@ -190,7 +206,6 @@ function GeneratorService.Client:ReportSlowClick(player: Player, generatorId: st
             end
         end
         
-        -- Reset counter after alerting
         playerSlowClickCount[player.UserId] = 0
     end
 end
@@ -203,9 +218,19 @@ function GeneratorService:KnitStart()
         playerRoles[player] = nil
         playerSuspicionCount[player.UserId] = nil
         playerSlowClickCount[player.UserId] = nil
+        playerGeneratorLocks[player.UserId] = nil
     end)
     
-    print("GeneratorService started")
+    task.spawn(function()
+        while true do
+            task.wait(1)
+            for generatorId, progress in pairs(generatorProgress) do
+                if progress > 0 then
+                    self.Client.ProgressSync:FireAll(generatorId, progress)
+                end
+            end
+        end
+    end)
 end
 
 function GeneratorService:KnitInit()

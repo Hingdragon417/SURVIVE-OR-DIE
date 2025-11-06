@@ -84,10 +84,7 @@ local function onPromptTriggered(prompt: ProximityPrompt, player: Player, prompt
 end
 
 function ProximityPromptController:CreatePromptForObject(object: Instance)
-    print("CreatePromptForObject called for:", object:GetFullName())
-    
     if object:FindFirstChildWhichIsA("ProximityPrompt") then
-        print("Object already has a ProximityPrompt, skipping")
         return
     end
     
@@ -95,19 +92,15 @@ function ProximityPromptController:CreatePromptForObject(object: Instance)
     
     if CollectionService:HasTag(object, "Generator") then
         promptType = "Generator"
-        print("Object has Generator tag")
     end
     
     if not promptType then
-        print("Unknown interactable type - no matching tags found")
         return
     end
     
     local prompt = Instance.new("ProximityPrompt")
     prompt.Name = "InteractionPrompt"
     prompt.Parent = object
-    
-    print("Created ProximityPrompt for", promptType)
     
     stylePrompt(prompt, promptType)
     
@@ -162,10 +155,7 @@ function ProximityPromptController:CleanupAllPrompts()
 end
 
 function ProximityPromptController:KnitStart()
-    print("ProximityPromptController starting...")
-    
     local interactables = CollectionService:GetTagged("Interactable")
-    print("Found", #interactables, "objects with Interactable tag")
     
     for _, object in ipairs(interactables) do
         self:CreatePromptForObject(object)

@@ -124,17 +124,13 @@ function ShopService.Client:PurchasePerk(player, perkName)
 end
 
 function ShopService:UpdatePlayerShops(shopItems)
-	print("[ShopService] UpdatePlayerShops called with", #shopItems, "items")
 	for _, player in pairs(Players:GetPlayers()) do
-		print(string.format("[ShopService] Processing player: %s", player.Name))
 		local session = DataService.getSession(player)
 		if session and session.Data then
-			print(string.format("[ShopService] %s has session data", player.Name))
 			local needsReset = false
 			if session.Data.Shop then
 				local count = 0
 				for _ in pairs(session.Data.Shop) do count += 1 end
-				print(string.format("[ShopService] %s current shop has %d items", player.Name, count))
 				if #session.Data.Shop > 0 or next(session.Data.Shop) == nil then
 					needsReset = true
 				end
@@ -142,19 +138,14 @@ function ShopService:UpdatePlayerShops(shopItems)
 				needsReset = true
 			end
 			if needsReset then
-				print(string.format("[ShopService] Resetting shop for %s", player.Name))
 				session.Data.Shop = {}
 				session.Data.RestockTimer = 15 * 60
 				for _, item in pairs(shopItems) do
 					session.Data.Shop[item.name] = item.data.Stock
-					print(string.format("[ShopService] Added %s to %s's shop (Stock: %d)", item.name, player.Name, item.data.Stock))
 				end
 				DataService:Replicate(player, {"Shop", "RestockTimer"})
-			else
-				print(string.format("[ShopService] %s already has shop, skipping", player.Name))
 			end
 		else
-			print(string.format("[ShopService] %s has no session, retrying...", player.Name))
 			task.spawn(function()
 				task.wait(2)
 				local retrySession = DataService.getSession(player)
@@ -204,26 +195,17 @@ function ShopService:RegeneratePlayerShop(player)
 end
 
 function ShopService:KnitStart()
-	print("[ShopService] Starting shop generation...")
 	local shopItems = self:GenerateShopItems()
-	print(string.format("[ShopService] Generated %d shop items", #shopItems))
-	for i, item in pairs(shopItems) do
-		print(string.format("[ShopService] Item %d: %s (Stock: %d)", i, item.name, item.data.Stock))
-	end
 	
-	-- Listen for when players' data is loaded and give them shop items
 	DataService._onPlayerDataLoaded:Connect(function(player)
-		print(string.format("[ShopService] Player %s data loaded, initializing shop", player.Name))
-		task.wait(0.1) -- Small delay to ensure everything is ready
+		task.wait(0.1)
 		local session = DataService.getSession(player)
 		if session and session.Data then
 			if not session.Data.Shop or next(session.Data.Shop) == nil then
-				print(string.format("[ShopService] Setting up initial shop for %s", player.Name))
 				session.Data.Shop = {}
 				session.Data.RestockTimer = 15 * 60
 				for _, item in pairs(shopItems) do
 					session.Data.Shop[item.name] = item.data.Stock
-					print(string.format("[ShopService] Added %s to %s's shop (Stock: %d)", item.name, player.Name, item.data.Stock))
 				end
 				DataService:Replicate(player, {"Shop", "RestockTimer"})
 			end
@@ -231,10 +213,8 @@ function ShopService:KnitStart()
 	end)
 	
 	task.wait(3)
-	print("[ShopService] Updating player shops...")
 	self:UpdatePlayerShops(shopItems)
 	self:StartRestockTimer()
-	print("[ShopService] Shop service started")
 end
 
 function ShopService:KnitInit()

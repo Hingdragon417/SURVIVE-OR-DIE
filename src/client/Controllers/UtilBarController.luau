@@ -79,7 +79,6 @@ function UtilBarController:UpdateUI()
 
 	local isKiller = RoleShowController:IsKiller() or false
 	
-	-- Clear existing slots
 	for _, child in pairs(centerFrame:GetChildren()) do
 		if child:IsA("GuiObject") and child.Name:find("PerksSlot") then
 			child:Destroy()
@@ -88,7 +87,6 @@ function UtilBarController:UpdateUI()
 
 	local slotOrder = {"Slot1", "Slot2", "Slot3"}
 	for _, slotName in ipairs(slotOrder) do
-		-- For killers, show abilities. For survivors, show perks
 		local slot = not isKiller and playerData.Perks and playerData.Perks[slotName] 
 			or playerData.Abilities and playerData.Abilities[slotName]
 		
@@ -125,7 +123,6 @@ function UtilBarController:UpdateUI()
 				newTemplate.Parent = centerFrame
 			end
 		else
-			-- Don't show empty slots
 			newTemplate:Destroy()
 		end
 	end

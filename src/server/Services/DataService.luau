@@ -87,20 +87,9 @@ function DataService.onPlayerAdded(player: Player)
 	session:Reconcile()
 	DataService._cache[player] = session
 	
-	-- Debug: Print abilities data on load
-	print(string.format("[DataService] %s loaded abilities:", player.Name))
-	if session.Data.Abilities then
-		for slotName, slot in pairs(session.Data.Abilities) do
-			print(string.format("  %s: Name=%s, Quantity=%d", slotName, slot.Name or "", slot.Quantity or 0))
-		end
-	end
-	
 	task.wait(1)
-	print(string.format("[DataService] Replicating all data to %s", player.Name))
-	print(string.format("[DataService] Cash=%d, Abilities exists=%s", session.Data.Cash, tostring(session.Data.Abilities ~= nil)))
 	DataService:Replicate(player)
 	
-	-- Fire event for other services to know player data is ready
 	DataService._onPlayerDataLoaded:Fire(player)
 end
 
@@ -199,7 +188,6 @@ function DataService.Client:UseAbility(player: Player, slotName: string)
 
 	abilitySlot.Quantity -= 1
 	
-	-- Clear the slot if quantity reaches 0
 	if abilitySlot.Quantity <= 0 then
 		abilitySlot.Name = ""
 		abilitySlot.Quantity = 0
@@ -222,7 +210,6 @@ function DataService.Client:UsePerks(player: Player, slotName: string)
 
 	perkSlot.Quantity -= 1
 	
-	-- Clear the slot if quantity reaches 0
 	if perkSlot.Quantity <= 0 then
 		perkSlot.Name = ""
 		perkSlot.Quantity = 0

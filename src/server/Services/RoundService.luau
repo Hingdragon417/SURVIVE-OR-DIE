@@ -100,7 +100,6 @@ function RoundService:SetStatus(newStatus)
                     local role = if player == killer then "Killer" else "Survivor"
                     self.Client.RoleAssigned:Fire(player, role)
                     GeneratorService:SetPlayerRole(player, role)
-                    print("[RoundService] Assigned role", role, "to", player.Name)
                 end
                 
                 task.wait(3)
@@ -172,7 +171,6 @@ function RoundService:SetupVotePads()
     local votePads = mapVote:FindFirstChild("MapVotePads")
     if not votePads then return end
     
-    -- Clean up existing connections
     for _, connection in self._connections do
         connection:Disconnect()
     end
@@ -241,7 +239,6 @@ function RoundService:SpawnPlayers(map, killer)
     if #spawns == 0 then return end
     
     for _, player in Players:GetPlayers() do
-        
         local randomSpawn = spawns[math.random(#spawns)]
         if player.Character then
             player.Character:PivotTo(randomSpawn.CFrame)
@@ -250,14 +247,12 @@ function RoundService:SpawnPlayers(map, killer)
 end
 
 function RoundService:CleanupRound()
-    -- Remove the loaded map
     for _, child in Workspace:GetChildren() do
         if ReplicatedStorage.Maps:FindFirstChild(child.Name) then
             child:Destroy()
         end
     end
     
-    -- Reset votes
     self.Votes = {0, 0, 0}
     table.clear(self.PlayerVotes)
     self:UpdateVoteDisplays()
