@@ -81,7 +81,7 @@ function RoundService:SetStatus(newStatus)
             self.SelectedMaps = self:GetRandomMaps()
             self:UpdateMapBoards(self.SelectedMaps)
             
-            for i = 30, 1, -1 do
+            for i = 10, 1, -1 do
                 self.Status = string.format("Intermission (%d)", i)
                 self.Client.StatusChanged:FireAll(self.Status)
                 task.wait(1)
@@ -94,21 +94,23 @@ function RoundService:SetStatus(newStatus)
                 self:LoadMap(winningMap.Name)
                 local killer = self:SelectKiller()
                 
+                local GeneratorService = Knit.GetService("GeneratorService")
+                
                 for _, player in Players:GetPlayers() do
                     local role = if player == killer then "Killer" else "Survivor"
                     self.Client.RoleAssigned:Fire(player, role)
+                    GeneratorService:SetPlayerRole(player, role)
+                    print("[RoundService] Assigned role", role, "to", player.Name)
                 end
                 
                 task.wait(3)
                 self:SpawnPlayers(Workspace:FindFirstChild(winningMap.Name), killer)
                 
-                -- Start 5 minute round countdown
                 self:SetStatus("RoundInProgress")
             else
                 self:SetStatus("Intermission")
             end
         elseif newStatus == "RoundInProgress" then
-            -- 5 minute countdown (300 seconds)
             for i = 300, 1, -1 do
                 local minutes = math.floor(i / 60)
                 local seconds = i % 60
@@ -117,7 +119,6 @@ function RoundService:SetStatus(newStatus)
                 task.wait(1)
             end
             
-            -- Round ended
             self:CleanupRound()
             self:SetStatus("Intermission")
         else
