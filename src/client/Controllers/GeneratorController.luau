@@ -210,18 +210,28 @@ end
 
 local function setProgressBarImmediate(progress: number)
     local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
-    if not generatorFrame then return end
+    if not generatorFrame then 
+        return 
+    end
     
     local content = generatorFrame:FindFirstChild("Content")
-    if not content then return end
+    if not content then 
+        return 
+    end
     
     local backgroundProgress = content:FindFirstChild("BackgroundProgress")
-    if not backgroundProgress then return end
+    if not backgroundProgress then 
+        return 
+    end
     
     local progressFrame = backgroundProgress:FindFirstChild("Progress")
-    if not progressFrame then return end
+    if not progressFrame then 
+        return 
+    end
     
-    if type(progress) ~= "number" then return end
+    if type(progress) ~= "number" then 
+        return 
+    end
     
     local targetScale = math.clamp(progress / 100, 0, 1)
     progressFrame.Size = UDim2.new(targetScale, 0, 1, 0)
@@ -277,22 +287,27 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
         self:CloseGenerator()
     end
     
-    local success1, initialProgress = pcall(function()
-        return GeneratorService:GetProgress(generatorId)
+    local initialProgress = 0
+    local timeLimit = 2.5
+    
+    local success1, result1 = pcall(function()
+        return GeneratorService:GetProgress(generatorId):await()
     end)
     
-    local success2, timeLimit = pcall(function()
-        return GeneratorService:GetButtonTimeLimit()
-    end)
-    
-    if not success1 then
-        warn("[GeneratorController] Failed to get progress:", initialProgress)
-        initialProgress = 0
+    if success1 then
+        initialProgress = result1
+    else
+        warn("[GeneratorController] Failed to get progress:", result1)
     end
     
-    if not success2 then
-        warn("[GeneratorController] Failed to get time limit:", timeLimit)
-        timeLimit = 2.5
+    local success2, result2 = pcall(function()
+        return GeneratorService:GetButtonTimeLimit():await()
+    end)
+    
+    if success2 then
+        timeLimit = result2
+    else
+        warn("[GeneratorController] Failed to get time limit:", result2)
     end
     
     currentGenerator = generatorId
@@ -312,20 +327,21 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
     
     generatorFrame.Visible = true
     
-    task.wait()
-    
-    if type(initialProgress) == "number" then
-        setProgressBarImmediate(initialProgress)
-    elseif type(initialProgress) == "table" and initialProgress.progress then
-        setProgressBarImmediate(initialProgress.progress)
-    end
-    
     if type(timeLimit) == "number" then
         buttonTimeLimit = timeLimit
     elseif type(timeLimit) == "table" and type(timeLimit.timeLimit) == "number" then
         buttonTimeLimit = timeLimit.timeLimit
     else
         buttonTimeLimit = 2.5
+    end
+    
+    local progressValue = initialProgress
+    if type(initialProgress) == "table" and initialProgress.progress then
+        progressValue = initialProgress.progress
+    end
+    
+    if type(progressValue) == "number" then
+        setProgressBarImmediate(progressValue)
     end
     
     spawnButton(clickBox)
