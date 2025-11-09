@@ -1,6 +1,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local Packages = ReplicatedStorage.Packages
 local Knit = require(Packages.Knit)
@@ -104,7 +106,7 @@ local function spawnButton(clickBox: Frame)
             
             local startTime = tick()
             local updateConnection
-            updateConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            updateConnection = RunService.Heartbeat:Connect(function()
                 if buttonClicked or not button.Parent then
                     updateConnection:Disconnect()
                     return
@@ -287,28 +289,23 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
         self:CloseGenerator()
     end
     
-    local initialProgress = 0
-    local timeLimit = 2.5
-    
-    local success1, result1 = pcall(function()
-        return GeneratorService:GetProgress(generatorId):await()
+    -- Get progress from server
+    GeneratorService:GetProgress(generatorId):andThen(function(progress)
+        if type(progress) == "number" and currentGenerator == generatorId then
+            setProgressBarImmediate(progress)
+        end
+    end):catch(function(err)
+        warn("[GeneratorController] Failed to get progress:", err)
     end)
     
-    if success1 then
-        initialProgress = result1
-    else
-        warn("[GeneratorController] Failed to get progress:", result1)
-    end
-    
-    local success2, result2 = pcall(function()
-        return GeneratorService:GetButtonTimeLimit():await()
+    -- Get time limit from server
+    GeneratorService:GetButtonTimeLimit():andThen(function(limit)
+        if type(limit) == "number" then
+            buttonTimeLimit = limit
+        end
+    end):catch(function(err)
+        warn("[GeneratorController] Failed to get time limit:", err)
     end)
-    
-    if success2 then
-        timeLimit = result2
-    else
-        warn("[GeneratorController] Failed to get time limit:", result2)
-    end
     
     currentGenerator = generatorId
     currentGeneratorObject = generatorObject
@@ -327,22 +324,11 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
     
     generatorFrame.Visible = true
     
-    if type(timeLimit) == "number" then
-        buttonTimeLimit = timeLimit
-    elseif type(timeLimit) == "table" and type(timeLimit.timeLimit) == "number" then
-        buttonTimeLimit = timeLimit.timeLimit
-    else
-        buttonTimeLimit = 2.5
-    end
+    -- Wait for UI to render and be ready
+    RunService.RenderStepped:Wait()
     
-    local progressValue = initialProgress
-    if type(initialProgress) == "table" and initialProgress.progress then
-        progressValue = initialProgress.progress
-    end
-    
-    if type(progressValue) == "number" then
-        setProgressBarImmediate(progressValue)
-    end
+    -- Initial progress will be set asynchronously by the Promise callback
+    setProgressBarImmediate(0)
     
     spawnButton(clickBox)
     
@@ -367,9 +353,18 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
         end
     end)
     
+    -- Request immediate progress sync from server to ensure we have the latest value
+    GeneratorService:GetProgress(generatorId):andThen(function(currentProgress)
+        if type(currentProgress) == "number" and generatorId == currentGenerator then
+            setProgressBarImmediate(currentProgress)
+        end
+    end):catch(function(err)
+        warn("[GeneratorController] Failed to sync progress:", err)
+    end)
+    
     frameClickConnection = generatorFrame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            local mousePos = game:GetService("UserInputService"):GetMouseLocation()
+            local mousePos = UserInputService:GetMouseLocation()
             local guiObjects = playerGUI:GetGuiObjectsAtPosition(mousePos.X, mousePos.Y)
             
             local clickedButton = false
@@ -391,11 +386,11 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
         end
     end)
     
-    clickAwayConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+    clickAwayConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
         
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local mousePos = game:GetService("UserInputService"):GetMouseLocation()
+            local mousePos = UserInputService:GetMouseLocation()
             local guiObjects = playerGUI:GetGuiObjectsAtPosition(mousePos.X, mousePos.Y)
             
             local clickedInside = false
@@ -412,7 +407,7 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
         end
     end)
     
-    movementConnection = game:GetService("RunService").Heartbeat:Connect(function()
+    movementConnection = RunService.Heartbeat:Connect(function()
         if player.Character and player.Character.PrimaryPart and initialPosition then
             local currentPos = player.Character.PrimaryPart.Position
             local distance = (currentPos - initialPosition).Magnitude
@@ -458,15 +453,8 @@ function GeneratorController:KnitStart()
     end)
     
     GeneratorService.ProgressSync:Connect(function(generatorId: string, progress: number)
-        if generatorId == currentGenerator then
-            local progressValue = progress
-            if type(progress) == "table" and progress.progress then
-                progressValue = progress.progress
-            end
-            
-            if type(progressValue) == "number" then
-                setProgressBarImmediate(progressValue)
-            end
+        if generatorId == currentGenerator and type(progress) == "number" then
+            setProgressBarImmediate(progress)
         end
     end)
     

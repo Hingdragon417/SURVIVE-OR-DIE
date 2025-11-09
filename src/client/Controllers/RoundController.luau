@@ -13,6 +13,8 @@ local RoundController = Knit.CreateController({
 
 RoundController.playerRole = nil
 
+local RoundService
+
 local function updateStatusDisplay(status)
     local mainGui = playerGUI:FindFirstChild("Main")
     if not mainGui then 
@@ -26,7 +28,6 @@ local function updateStatusDisplay(status)
 end
 
 function RoundController:KnitStart()
-    local RoundService = Knit.GetService("RoundService")
     
     RoundService.RoleAssigned:Connect(function(role)
         self.playerRole = role
@@ -38,6 +39,7 @@ function RoundController:KnitStart()
 end
 
 function RoundController:KnitInit()
+    RoundService = Knit.GetService("RoundService")
 end
 
 return RoundController

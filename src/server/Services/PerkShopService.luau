@@ -1,5 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local Packages = ReplicatedStorage.Packages
 
 local Knit = require(Packages.Knit)
@@ -165,7 +166,7 @@ function ShopService:UpdatePlayerShops(shopItems)
 end
 
 function ShopService:StartRestockTimer()
-	game:GetService("RunService").Heartbeat:Connect(function()
+	RunService.Heartbeat:Connect(function()
 		for _, player in pairs(Players:GetPlayers()) do
 			local session = DataService.getSession(player)
 			if session and session.Data and session.Data.RestockTimer then

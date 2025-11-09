@@ -210,8 +210,9 @@ function GeneratorService.Client:ReportSlowClick(player: Player, generatorId: st
     end
 end
 
+local RoundService
+
 function GeneratorService:KnitStart()
-    local RoundService = Knit.GetService("RoundService")
     local Players = game:GetService("Players")
     
     Players.PlayerRemoving:Connect(function(player)
@@ -234,6 +235,7 @@ function GeneratorService:KnitStart()
 end
 
 function GeneratorService:KnitInit()
+    RoundService = Knit.GetService("RoundService")
 end
 
 return GeneratorService
