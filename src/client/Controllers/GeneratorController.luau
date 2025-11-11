@@ -72,20 +72,19 @@ local function spawnButton(clickBox: Frame)
     
     local button = template:Clone()
     
-    local uiScale = button:FindFirstChildWhichIsA("UIScale")
-    if not uiScale then
-        uiScale = Instance.new("UIScale")
-        uiScale.Parent = button
-    end
-    
-    local randomScale = math.random(35, 65) / 100
-    uiScale.Scale = randomScale
-    
     button.AnchorPoint = Vector2.new(0.5, 0.5)
     
-    local tempSize = button.Size
-    local estimatedWidth = tempSize.X.Offset * randomScale
-    local estimatedHeight = tempSize.Y.Offset * randomScale
+    local randomScale = math.random(150, 250) / 100
+    local baseSize = button.Size
+    button.Size = UDim2.new(
+        baseSize.X.Scale * randomScale,
+        baseSize.X.Offset,
+        baseSize.Y.Scale * randomScale,
+        baseSize.Y.Offset
+    )
+    
+    local estimatedWidth = baseSize.X.Offset * randomScale
+    local estimatedHeight = baseSize.Y.Offset * randomScale
     local buttonAbsoluteSize = Vector2.new(estimatedWidth, estimatedHeight)
     local edgePadding = 20
     

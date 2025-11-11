@@ -228,41 +228,7 @@ function ButtonController:ClickedButtonTween(button : GuiButton | ImageButton)
     end)
     
 	ClickSound:Play()
-	
-	if buttonTweens[button] then
-        buttonTweens[button]:Cancel()
-    end
     
-    local uiScale = button:FindFirstChildWhichIsA("UIScale") or Instance.new("UIScale", button)
-    
-    local clickDownTween = TweenService:Create(
-        uiScale, 
-        TweenInfo.new(clickTweenTime * 0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), 
-        {Scale = clickedScale}
-    )
-    
-    buttonTweens[button] = clickDownTween
-    clickDownTween:Play()
-    
-    clickDownTween.Completed:Connect(function()
-        local targetScale = buttonHoverStates[button] and hoverScale or startScale
-        
-        local clickUpTween = TweenService:Create(
-            uiScale, 
-            TweenInfo.new(clickTweenTime * 1.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), 
-            {Scale = targetScale}
-        )
-        
-        buttonTweens[button] = clickUpTween
-        clickUpTween:Play()
-
-        clickUpTween.Completed:Connect(function()
-            if buttonTweens[button] == clickUpTween then
-                buttonTweens[button] = nil
-            end
-        end)
-    end)
-
     if not frames then
         return
     end
@@ -280,6 +246,47 @@ function ButtonController:ClickedButtonTween(button : GuiButton | ImageButton)
     else
         self.onFrameInvisible()
     end
+end
+
+function ButtonController:PressButton(button : GuiButton | ImageButton)
+	if buttonTweens[button] then
+        buttonTweens[button]:Cancel()
+    end
+    
+    local uiScale = button:FindFirstChildWhichIsA("UIScale") or Instance.new("UIScale", button)
+    
+    local clickDownTween = TweenService:Create(
+        uiScale, 
+        TweenInfo.new(clickTweenTime * 0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), 
+        {Scale = clickedScale}
+    )
+    
+    buttonTweens[button] = clickDownTween
+    clickDownTween:Play()
+end
+
+function ButtonController:ReleaseButton(button : GuiButton | ImageButton)
+	if buttonTweens[button] then
+        buttonTweens[button]:Cancel()
+    end
+    
+    local uiScale = button:FindFirstChildWhichIsA("UIScale") or Instance.new("UIScale", button)
+    local targetScale = buttonHoverStates[button] and hoverScale or startScale
+    
+    local clickUpTween = TweenService:Create(
+        uiScale, 
+        TweenInfo.new(clickTweenTime * 1.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), 
+        {Scale = targetScale}
+    )
+    
+    buttonTweens[button] = clickUpTween
+    clickUpTween:Play()
+
+    clickUpTween.Completed:Connect(function()
+        if buttonTweens[button] == clickUpTween then
+            buttonTweens[button] = nil
+        end
+    end)
 end
 
 function ButtonController:SetupButtons(uiScreen: Instance) : any
@@ -361,6 +368,14 @@ function ButtonController:KnitStart()
                     self:TweenElement(descendant, startScale, hoverTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
                 end)
 
+                buttonConnections[descendant].MouseButton1Down = descendant.MouseButton1Down:Connect(function()
+                    self:PressButton(descendant)
+                end)
+                
+                buttonConnections[descendant].MouseButton1Up = descendant.MouseButton1Up:Connect(function()
+                    self:ReleaseButton(descendant)
+                end)
+                
                 buttonConnections[descendant].MouseButton1Click = descendant.MouseButton1Click:Connect(function()
                     self:ClickedButtonTween(descendant)
                 end)
@@ -397,6 +412,14 @@ function ButtonController:KnitStart()
                 self:TweenElement(button, startScale, hoverTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
             end)
 
+            buttonConnections[button].MouseButton1Down = button.MouseButton1Down:Connect(function()
+                self:PressButton(button)
+            end)
+            
+            buttonConnections[button].MouseButton1Up = button.MouseButton1Up:Connect(function()
+                self:ReleaseButton(button)
+            end)
+            
             buttonConnections[button].MouseButton1Click = button.MouseButton1Click:Connect(function()
                 self:ClickedButtonTween(button)
             end)
