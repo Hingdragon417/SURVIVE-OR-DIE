@@ -94,7 +94,6 @@ local previousFrame : Frame
 local currentFrame : Frame
 
 local isDebounce = false
-local DEBOUNCE_TIME = 0.05
 
 local function hideFrame(frame)
     if frameTweens[frame] then
