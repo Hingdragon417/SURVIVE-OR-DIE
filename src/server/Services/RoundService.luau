@@ -24,6 +24,7 @@ RoundService.SelectedMaps = {}
 RoundService.CompletedGenerators = {}
 RoundService.CompletedGeneratorCount = 0
 RoundService.CurrentMap = nil
+RoundService.PlayersInRound = {}
 
 function RoundService:GetRandomMaps()
     local maps = ReplicatedStorage.Maps:GetChildren()
@@ -101,7 +102,9 @@ function RoundService:SetStatus(newStatus)
                 
                 local GeneratorService = Knit.GetService("GeneratorService")
                 
+                table.clear(self.PlayersInRound)
                 for _, player in Players:GetPlayers() do
+                    table.insert(self.PlayersInRound, player)
                     local role = if player == killer then "Killer" else "Survivor"
                     self.Client.RoleAssigned:Fire(player, role)
                     GeneratorService:SetPlayerRole(player, role)
@@ -267,6 +270,7 @@ function RoundService:CleanupRound()
     self.CompletedGeneratorCount = 0
     self.Client.GeneratorsCompleted:FireAll(0)
     self.CurrentMap = nil
+    table.clear(self.PlayersInRound)
 end
 
 function RoundService:MarkGeneratorCompleted(generatorId: string)
@@ -332,6 +336,10 @@ end
 
 function RoundService:GetCompletedGeneratorCount(): number
     return self.CompletedGeneratorCount
+end
+
+function RoundService.Client:GetPlayersInRound(player: Player)
+    return self.Server.PlayersInRound
 end
 
 return RoundService

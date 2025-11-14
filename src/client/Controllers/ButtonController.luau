@@ -30,6 +30,7 @@ local ButtonController = Knit.CreateController({
     Name = "ButtonController",
 })
 
+local SpectateController
 local buttonTweens = {}
 local buttonHoverStates = {} 
 local frameTweens = {}
@@ -90,7 +91,6 @@ function ButtonController:TweenElement(element : GuiObject, targetScale : number
     return tween
 end
 
-local previousFrame : Frame
 local currentFrame : Frame
 
 local isDebounce = false
@@ -376,7 +376,15 @@ function ButtonController:KnitStart()
                 end)
                 
                 buttonConnections[descendant].MouseButton1Click = descendant.MouseButton1Click:Connect(function()
-                    self:ClickedButtonTween(descendant)
+                    if descendant.Name == "Watch" and SpectateController then
+                        if SpectateController:IsSpectating() then
+                            SpectateController:StopSpectating()
+                        else
+                            SpectateController:StartSpectating()
+                        end
+                    else
+                        self:ClickedButtonTween(descendant)
+                    end
                 end)
             end
         end
@@ -420,13 +428,31 @@ function ButtonController:KnitStart()
             end)
             
             buttonConnections[button].MouseButton1Click = button.MouseButton1Click:Connect(function()
-                self:ClickedButtonTween(button)
+                if button.Name == "Watch" and SpectateController then
+                    if SpectateController:IsSpectating() then
+                        SpectateController:StopSpectating()
+                    else
+                        SpectateController:StartSpectating()
+                    end
+                else
+                    self:ClickedButtonTween(button)
+                end
             end)
         end
     end
 end
 
 function ButtonController:KnitInit()
+    local success, result = pcall(function()
+        return Knit.GetController("SpectateController")
+    end)
+    
+    if success then
+        SpectateController = result
+    else
+        warn("[ButtonController] Failed to get SpectateController:", result)
+    end
+    
     self:CleanupFrameTweens()
     self:CleanupButtonConnections()
     isTransitioning = false
