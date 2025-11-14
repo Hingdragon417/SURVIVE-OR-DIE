@@ -1,4 +1,5 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local Packages = ReplicatedStorage.Packages
 local Knit = require(Packages.Knit)
@@ -9,6 +10,7 @@ local GeneratorService = Knit.CreateService({
         ProgressUpdated = Knit.CreateSignal(),
         GeneratorCooldown = Knit.CreateSignal(),
         ProgressSync = Knit.CreateSignal(),
+        GeneratorCompleted = Knit.CreateSignal(),
     },
 })
 
@@ -23,6 +25,7 @@ local generatorProgress = {}
 local playerRoles = {}
 local generatorCooldowns = {}
 local playerGeneratorLocks = {}
+local RoundService
 
 local function createHighlight(parent: Instance, fillColor: Color3, fillTransparency: number, duration: number)
     local highlight = Instance.new("Highlight")
@@ -73,7 +76,7 @@ function GeneratorService:StartCooldown(generatorId: string, generator: Instance
     end
     
     if primaryPart then
-        local Players = game:GetService("Players")
+
         for _, player in Players:GetPlayers() do
             if player.Character and player.Character.PrimaryPart then
                 local distance = (player.Character.PrimaryPart.Position - primaryPart.Position).Magnitude
@@ -167,6 +170,17 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
     
     if newProgress >= 100 then
         playerGeneratorLocks[player.UserId] = nil
+        
+        if not RoundService then
+            RoundService = Knit.GetService("RoundService")
+        end
+        
+        if RoundService then
+            local generatorName = generatorId:match("%.([^%.]+)%.Part$") or generatorId
+            RoundService:MarkGeneratorCompleted(generatorName)
+        end
+        
+        self.GeneratorCompleted:FireAll(generatorId)
     end
     
     return newProgress
@@ -190,7 +204,7 @@ function GeneratorService.Client:ReportSlowClick(player: Player, generatorId: st
     
     if playerSlowClickCount[player.UserId] >= SLOW_CLICK_ALERT_THRESHOLD then
         if player.Character and player.Character.PrimaryPart then
-            local Players = game:GetService("Players")
+
             for _, otherPlayer in Players:GetPlayers() do
                 if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character.PrimaryPart then
                     local distance = (otherPlayer.Character.PrimaryPart.Position - player.Character.PrimaryPart.Position).Magnitude
@@ -213,7 +227,6 @@ end
 local RoundService
 
 function GeneratorService:KnitStart()
-    local Players = game:GetService("Players")
     
     Players.PlayerRemoving:Connect(function(player)
         playerRoles[player] = nil

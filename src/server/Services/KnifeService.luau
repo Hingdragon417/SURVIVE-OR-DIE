@@ -25,8 +25,20 @@ function KnifeService.Client:KnifeAttack(player: Player)
         return 
     end
     
+    local humanoid = character:FindFirstChild("Humanoid")
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return end
+    
+    local originalWalkSpeed = humanoid and humanoid.WalkSpeed or 16
+    if humanoid then
+        humanoid.WalkSpeed = 5
+    end
+    
+    task.delay(1, function()
+        if humanoid and humanoid.Parent then
+            humanoid.WalkSpeed = originalWalkSpeed
+        end
+    end)
     
     local hitbox = Instance.new("Part")
     hitbox.Name = "KnifeHitbox"
@@ -77,7 +89,7 @@ function KnifeService.Client:KnifeAttack(player: Player)
                 
                 local humanoid = hit.Parent:FindFirstChild("Humanoid")
                 if humanoid then
-                    humanoid:TakeDamage(25)
+                    humanoid:TakeDamage(40)
                 end
             end
         end

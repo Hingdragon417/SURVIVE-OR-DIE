@@ -27,6 +27,23 @@ local function updateStatusDisplay(status)
     end
 end
 
+local function updateGeneratorDisplay(completedCount)
+    local mainGui = playerGUI:FindFirstChild("Main")
+    if not mainGui then 
+        return 
+    end
+    
+    local statusContainer = mainGui:FindFirstChild("StatusContainer")
+    if not statusContainer then
+        return
+    end
+    
+    local gensLabel = statusContainer:FindFirstChild("Gens")
+    if gensLabel and gensLabel:IsA("TextLabel") then
+        gensLabel.Text = string.format("%d/5 Generators", completedCount)
+    end
+end
+
 function RoundController:KnitStart()
     
     RoundService.RoleAssigned:Connect(function(role)
@@ -35,6 +52,10 @@ function RoundController:KnitStart()
     
     RoundService.StatusChanged:Connect(function(status)
         updateStatusDisplay(status)
+    end)
+    
+    RoundService.GeneratorsCompleted:Connect(function(completedCount)
+        updateGeneratorDisplay(completedCount)
     end)
 end
 

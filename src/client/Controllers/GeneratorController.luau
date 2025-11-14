@@ -27,6 +27,7 @@ local progressUpdatedConnection = nil
 local generatorCooldownConnection = nil
 local initialPosition = nil
 local generatorCooldowns = {}
+local completedGenerators = {}
 local buttonTimeLimit = 2.5
 
 local function clearButtons()
@@ -275,6 +276,15 @@ end
 function GeneratorController:StartGenerator(generatorObject: Instance)
     local generatorId = generatorObject:GetFullName()
     
+    if completedGenerators[generatorId] then
+        warn("[GeneratorController] Generator", generatorId, "is already completed, blocking access")
+        local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
+        if generatorFrame then
+            generatorFrame.Visible = false
+        end
+        return
+    end
+    
     if generatorCooldowns[generatorId] == true then
         warn("[GeneratorController] Generator", generatorId, "is on cooldown, cannot access")
         local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
@@ -346,6 +356,7 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
                 updateProgressBar(progressValue)
                 
                 if progressValue >= 100 then
+                    completedGenerators[generatorId] = true
                     self:CloseGenerator()
                 end
             end
@@ -447,6 +458,14 @@ function GeneratorController:KnitStart()
         end
         
         if onCooldown and generatorId == currentGenerator then
+            GeneratorController:CloseGenerator()
+        end
+    end)
+    
+    GeneratorService.GeneratorCompleted:Connect(function(generatorId: string)
+        completedGenerators[generatorId] = true
+        
+        if generatorId == currentGenerator then
             GeneratorController:CloseGenerator()
         end
     end)

@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local MapEnums = require(ReplicatedStorage.Shared.MapEnums)
@@ -10,7 +11,8 @@ local RoundService = Knit.CreateService({
     Client = { 
         StatusChanged = Knit.CreateSignal(),
         VoteChanged = Knit.CreateSignal(),
-        RoleAssigned = Knit.CreateSignal()
+        RoleAssigned = Knit.CreateSignal(),
+        GeneratorsCompleted = Knit.CreateSignal()
     },
     Status = "Waiting",
     _connections = {}
@@ -19,6 +21,9 @@ local RoundService = Knit.CreateService({
 RoundService.Votes = {0, 0, 0}
 RoundService.PlayerVotes = {}
 RoundService.SelectedMaps = {}
+RoundService.CompletedGenerators = {}
+RoundService.CompletedGeneratorCount = 0
+RoundService.CurrentMap = nil
 
 function RoundService:GetRandomMaps()
     local maps = ReplicatedStorage.Maps:GetChildren()
@@ -209,6 +214,7 @@ function RoundService:LoadMap(mapName)
     
     local mapClone = map:Clone()
     mapClone.Parent = Workspace
+    self.CurrentMap = mapName
 end
 
 function RoundService:SelectKiller()
@@ -256,6 +262,76 @@ function RoundService:CleanupRound()
     self.Votes = {0, 0, 0}
     table.clear(self.PlayerVotes)
     self:UpdateVoteDisplays()
+    
+    table.clear(self.CompletedGenerators)
+    self.CompletedGeneratorCount = 0
+    self.Client.GeneratorsCompleted:FireAll(0)
+    self.CurrentMap = nil
+end
+
+function RoundService:MarkGeneratorCompleted(generatorId: string)
+    if not self.CompletedGenerators[generatorId] then
+        self.CompletedGenerators[generatorId] = true
+        self.CompletedGeneratorCount = self.CompletedGeneratorCount + 1
+        self.Client.GeneratorsCompleted:FireAll(self.CompletedGeneratorCount)
+        
+        if self.CompletedGeneratorCount >= 5 then
+            self:OpenGate()
+        end
+    end
+end
+
+function RoundService:OpenGate()
+    if not self.CurrentMap then return end
+    
+    local mapInWorkspace = Workspace:FindFirstChild(self.CurrentMap)
+    if not mapInWorkspace then return end
+    
+    local gate = mapInWorkspace:FindFirstChild("Gate")
+    if not gate then return end
+    
+    local gateDoor = gate:FindFirstChild("GateDoor")
+    local gateDoor2 = gate:FindFirstChild("GateDoor2")
+    local gateDoorOpen = gate:FindFirstChild("GateDoorOpen")
+    local gateDoorOpen2 = gate:FindFirstChild("GateDoorOpen2")
+    
+    if gateDoor and gateDoorOpen and gateDoor:IsA("Model") then
+        local tweenInfo = TweenInfo.new(
+            2,
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.Out
+        )
+        
+        if gateDoor.PrimaryPart then
+            local currentRotation = gateDoor.PrimaryPart.CFrame - gateDoor.PrimaryPart.Position
+            local targetPosition = gateDoorOpen.Position
+            local targetCFrame = currentRotation + targetPosition
+            
+            local tween = TweenService:Create(gateDoor.PrimaryPart, tweenInfo, {CFrame = targetCFrame})
+            tween:Play()
+        end
+    end
+    
+    if gateDoor2 and gateDoorOpen2 and gateDoor2:IsA("Model") then
+        local tweenInfo = TweenInfo.new(
+            2,
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.Out
+        )
+        
+        if gateDoor2.PrimaryPart then
+            local currentRotation = gateDoor2.PrimaryPart.CFrame - gateDoor2.PrimaryPart.Position
+            local targetPosition = gateDoorOpen2.Position
+            local targetCFrame = currentRotation + targetPosition
+            
+            local tween = TweenService:Create(gateDoor2.PrimaryPart, tweenInfo, {CFrame = targetCFrame})
+            tween:Play()
+        end
+    end
+end
+
+function RoundService:GetCompletedGeneratorCount(): number
+    return self.CompletedGeneratorCount
 end
 
 return RoundService
