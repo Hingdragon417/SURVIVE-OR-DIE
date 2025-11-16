@@ -17,7 +17,7 @@ return {
         }
     },
 
-    Abilities = {
+    SurvivorPerks = {
         Slot1 = {
             Name = "",
             Quantity = 0

@@ -4,7 +4,7 @@ local RunService = game:GetService("RunService")
 local Packages = ReplicatedStorage.Packages
 
 local Knit = require(Packages.Knit)
-local PerkEnums = require(ReplicatedStorage.Shared.Data.PerkEnums)
+local KillerPerks = require(ReplicatedStorage.Shared.Data.KillerPerks)
 
 local DataService
 
@@ -20,7 +20,7 @@ function ShopService:GenerateShopItems()
 	local maxItems = 3
 	local availablePerks = {}
 
-	for perkName, perkData in pairs(PerkEnums) do
+	for perkName, perkData in pairs(KillerPerks) do
 		table.insert(availablePerks, { name = perkName, data = perkData })
 	end
 
@@ -74,7 +74,7 @@ function ShopService.Client:PurchasePerk(player, perkName)
 		return false, "No player data found"
 	end
 
-	local perkData = PerkEnums[perkName]
+	local perkData = KillerPerks[perkName]
 	if not perkData then
 		return false, "Perk not found"
 	end

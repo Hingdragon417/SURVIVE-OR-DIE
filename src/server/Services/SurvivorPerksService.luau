@@ -5,35 +5,35 @@ local Assets = ReplicatedStorage.Assets
 local Shared = ReplicatedStorage.Shared
 
 local Knit = require(Packages.Knit)
-local AbilitiesEnums = require(Shared.Data.AbilitiesEnums)
+local SurvivorPerks = require(Shared.Data.SurvivorPerks)
 
 local DataService
 
-local AbilitiesService = Knit.CreateService({
-    Name = "AbilitiesService",
+local SurvivorPerksService = Knit.CreateService({
+    Name = "SurvivorPerksService",
     Client = {
-        PurchaseAbility = "PurchaseAbility",
+        PurchaseSurvivorPerk = "PurchaseSurvivorPerk",
     },
     _purchaseLocks = {},
 })
 
-function AbilitiesService.Client:PurchaseAbility(player: Player, abilityName: string)
-    local lockKey = player.UserId .. "_" .. abilityName
-    if AbilitiesService._purchaseLocks[lockKey] then
+function SurvivorPerksService.Client:PurchaseSurvivorPerk(player: Player, perkName: string)
+    local lockKey = player.UserId .. "_" .. perkName
+    if SurvivorPerksService._purchaseLocks[lockKey] then
         return false, "Purchase in progress"
     end
     
-    AbilitiesService._purchaseLocks[lockKey] = true
+    SurvivorPerksService._purchaseLocks[lockKey] = true
     
-    local abilityData = AbilitiesEnums[abilityName]
+    local abilityData = SurvivorPerks[perkName]
     if not abilityData then
-        AbilitiesService._purchaseLocks[lockKey] = false
+        SurvivorPerksService._purchaseLocks[lockKey] = false
         return false, "Invalid ability"
     end
 
     local session = DataService.getSession(player)
     if not session or not session.Data then
-        AbilitiesService._purchaseLocks[lockKey] = false
+        SurvivorPerksService._purchaseLocks[lockKey] = false
         return false, "Data not found"
     end
     
@@ -43,8 +43,8 @@ function AbilitiesService.Client:PurchaseAbility(player: Player, abilityName: st
     local availableSlot = nil
     
     for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
-        local slot = data.Abilities[slotName]
-        if slot.Name == abilityName then
+        local slot = data.SurvivorPerks[slotName]
+        if slot.Name == perkName then
             currentAmount += slot.Quantity
             if not availableSlot then
                 availableSlot = slotName
@@ -55,46 +55,46 @@ function AbilitiesService.Client:PurchaseAbility(player: Player, abilityName: st
     end
 
     if currentAmount >= abilityData.MaxAmount then
-        AbilitiesService._purchaseLocks[lockKey] = false
+        SurvivorPerksService._purchaseLocks[lockKey] = false
         return false, "Maximum amount reached"
     end
 
     if data.Cash < abilityData.Price then
-        AbilitiesService._purchaseLocks[lockKey] = false
+        SurvivorPerksService._purchaseLocks[lockKey] = false
         return false, "Not enough cash"
     end
     
     if not availableSlot then
-        AbilitiesService._purchaseLocks[lockKey] = false
+        SurvivorPerksService._purchaseLocks[lockKey] = false
         return false, "No available slots"
     end
 
     data.Cash -= abilityData.Price
     
-    if data.Abilities[availableSlot].Name == abilityName then
-        data.Abilities[availableSlot].Quantity += 1
+    if data.SurvivorPerks[availableSlot].Name == perkName then
+        data.SurvivorPerks[availableSlot].Quantity += 1
     else
-        data.Abilities[availableSlot].Name = abilityName
-        data.Abilities[availableSlot].Quantity = 1
+        data.SurvivorPerks[availableSlot].Name = perkName
+        data.SurvivorPerks[availableSlot].Quantity = 1
     end
     
-    DataService:Replicate(player, {"Cash", "Abilities"})
+    DataService:Replicate(player, {"Cash", "SurvivorPerks"})
     
     task.delay(0.1, function()
-        AbilitiesService._purchaseLocks[lockKey] = false
+        SurvivorPerksService._purchaseLocks[lockKey] = false
     end)
 
     return true, "Purchase successful"
 end
 
-function AbilitiesService:KnitInit() 
+function SurvivorPerksService:KnitInit() 
     DataService = Knit.GetService("DataService")
 end
 
-function AbilitiesService:KnitStart()
+function SurvivorPerksService:KnitStart()
     while not DataService do
         task.wait()
     end
 end
 
-return AbilitiesService
+return SurvivorPerksService

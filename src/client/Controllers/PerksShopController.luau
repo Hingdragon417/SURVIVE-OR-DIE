@@ -5,12 +5,12 @@ local Packages = ReplicatedStorage.Packages
 local Shared = ReplicatedStorage.Shared
 
 local Knit = require(Packages.Knit)
-local PerkEnums = require(Shared.Data.PerkEnums)
-local AbilitiesEnums = require(Shared.Data.AbilitiesEnums)
+local KillerPerks = require(Shared.Data.KillerPerks)
+local SurvivorPerks = require(Shared.Data.SurvivorPerks)
 
 local DataController
 local PerkShopService
-local AbilitiesService
+local SurvivorPerksService
 
 local ShopController = Knit.CreateController({
 	Name = "ShopController",
@@ -56,15 +56,15 @@ function ShopController:UpdateTimerDisplay()
 	end
 end
 
-function ShopController:GetAbilityAmount(playerData, abilityName)
-	if not playerData or not playerData.Abilities then
+function ShopController:GetSurvivorPerkAmount(playerData, perkName)
+	if not playerData or not playerData.SurvivorPerks then
 		return 0
 	end
 	
 	local total = 0
 	for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
-		local slot = playerData.Abilities[slotName]
-		if slot and slot.Name == abilityName then
+		local slot = playerData.SurvivorPerks[slotName]
+		if slot and slot.Name == perkName then
 			total += slot.Quantity
 		end
 	end
@@ -86,7 +86,7 @@ function ShopController:SwitchTab(tabName)
 	if tabName == "Killer" then
 		self:UpdateShopUI()
 	else
-		self:UpdateAbilitiesUI()
+		self:UpdateSurvivorPerksUI()
 	end
 end
 
@@ -107,7 +107,7 @@ function ShopController:UpdateShopUI()
 
 		local itemIndex = 1
 		for perkName, stockAmount in pairs(playerData.Shop) do
-			local perkData = PerkEnums[perkName]
+			local perkData = KillerPerks[perkName]
 			if not perkData then 
 				continue 
 			end
@@ -199,7 +199,7 @@ function ShopController:UpdateShopUI()
 	isUpdating = false
 end
 
-function ShopController:UpdateAbilitiesUI()
+function ShopController:UpdateSurvivorPerksUI()
 	if isUpdating then 
 		return 
 	end
@@ -213,13 +213,13 @@ function ShopController:UpdateAbilitiesUI()
 		end
 	end
 
-	if playerData and playerData.Abilities then
+	if playerData and playerData.SurvivorPerks then
 		local itemIndex = 1
-		for abilityName, abilityData in pairs(AbilitiesEnums) do
+		for perkName, perkData in pairs(SurvivorPerks) do
 			local newItem
 			local success, err = pcall(function()
 				newItem = PerksTemplate:Clone()
-				newItem.Name = "AbilityItem" .. itemIndex
+				newItem.Name = "SurvivorPerkItem" .. itemIndex
 				newItem.Visible = true
 				newItem.Parent = scrollingFrame
 			end)
@@ -237,37 +237,37 @@ function ShopController:UpdateAbilitiesUI()
 
 			local nameLabel = holder:FindFirstChild("Name")
 			if nameLabel then
-				nameLabel.Text = abilityData.Name
+				nameLabel.Text = perkData.Name
 			end
 
-			local ownedAmount = self:GetAbilityAmount(playerData, abilityName)
+			local ownedAmount = self:GetSurvivorPerkAmount(playerData, perkName)
 			local stockLabel = holder:FindFirstChild("Stock")
 			if stockLabel then
-				stockLabel.Text = string.format("%d/%d", ownedAmount, abilityData.MaxAmount)
+				stockLabel.Text = string.format("%d/%d", ownedAmount, perkData.MaxAmount)
 			end
 
 			local purchaseButton = holder:FindFirstChild("Buy")
 			if purchaseButton then
 				local buttonText = purchaseButton:FindFirstChild("Text")
 				
-				if ownedAmount >= abilityData.MaxAmount then
+				if ownedAmount >= perkData.MaxAmount then
 					if buttonText then buttonText.Text = "MAX" end
 					purchaseButton.BackgroundColor3 = Color3.new(0.5, 0.5, 0.5)
 					purchaseButton.Active = false
 				else
-					if buttonText then buttonText.Text = "$" .. abilityData.Price end
+					if buttonText then buttonText.Text = "$" .. perkData.Price end
 					purchaseButton.BackgroundColor3 = Color3.new(0, 0.7, 0)
 					purchaseButton.Active = true
 
 					purchaseButton.MouseButton1Click:Connect(function()
-						self:PurchaseAbility(abilityName, newItem, buttonText, stockLabel, abilityData)
+						self:PurchaseSurvivorPerk(perkName, newItem, buttonText, stockLabel, perkData)
 					end)
 				end
 			end
 
 			local iconLabel = holder:FindFirstChild("Icon")
 			if iconLabel then
-				iconLabel.Image = "rbxassetid://" .. abilityData.Image
+				iconLabel.Image = "rbxassetid://" .. perkData.Image
 			end
 
 			itemIndex += 1
@@ -277,12 +277,12 @@ function ShopController:UpdateAbilitiesUI()
 	isUpdating = false
 end
 
-function ShopController:PurchaseAbility(abilityName, itemFrame, buttonText, stockLabel, abilityData)
-	if self._purchasing[abilityName] then
+function ShopController:PurchaseSurvivorPerk(perkName, itemFrame, buttonText, stockLabel, perkData)
+	if self._purchasing[perkName] then
 		return
 	end
 	
-	self._purchasing[abilityName] = true
+	self._purchasing[perkName] = true
 	
 	if buttonText then buttonText.Text = "..." end
 	local holder = itemFrame:FindFirstChild("Holder")
@@ -292,33 +292,33 @@ function ShopController:PurchaseAbility(abilityName, itemFrame, buttonText, stoc
 		purchaseButton.Active = false
 	end
 	
-	AbilitiesService:PurchaseAbility(abilityName):andThen(function(success, message)
+	SurvivorPerksService:PurchaseSurvivorPerk(perkName):andThen(function(success, message)
 		if not success then
-			if buttonText then buttonText.Text = "$" .. abilityData.Price end
+			if buttonText then buttonText.Text = "$" .. perkData.Price end
 			if purchaseButton then
 				purchaseButton.BackgroundColor3 = Color3.new(0, 0.7, 0)
 				purchaseButton.Active = true
 			end
-			self._purchasing[abilityName] = false
+			self._purchasing[perkName] = false
 			return
 		end
 		
 		task.wait(0.2)
 		local newData = DataController.getData()
 		if newData then
-			local ownedAmount = self:GetAbilityAmount(newData, abilityName)
+			local ownedAmount = self:GetSurvivorPerkAmount(newData, perkName)
 			if stockLabel then
-				stockLabel.Text = string.format("%d/%d", ownedAmount, abilityData.MaxAmount)
+				stockLabel.Text = string.format("%d/%d", ownedAmount, perkData.MaxAmount)
 			end
 			
-			if ownedAmount >= abilityData.MaxAmount then
+			if ownedAmount >= perkData.MaxAmount then
 				if buttonText then buttonText.Text = "MAX" end
 				if purchaseButton then
 					purchaseButton.BackgroundColor3 = Color3.new(0.5, 0.5, 0.5)
 					purchaseButton.Active = false
 				end
 			else
-				if buttonText then buttonText.Text = "$" .. abilityData.Price end
+				if buttonText then buttonText.Text = "$" .. perkData.Price end
 				if purchaseButton then
 					purchaseButton.BackgroundColor3 = Color3.new(0, 0.7, 0)
 					purchaseButton.Active = true
@@ -326,14 +326,14 @@ function ShopController:PurchaseAbility(abilityName, itemFrame, buttonText, stoc
 			end
 		end
 		
-		self._purchasing[abilityName] = false
+		self._purchasing[perkName] = false
 	end):catch(function(err)
-		if buttonText then buttonText.Text = "$" .. abilityData.Price end
+		if buttonText then buttonText.Text = "$" .. perkData.Price end
 		if purchaseButton then
 			purchaseButton.BackgroundColor3 = Color3.new(0, 0.7, 0)
 			purchaseButton.Active = true
 		end
-		self._purchasing[abilityName] = false
+		self._purchasing[perkName] = false
 	end)
 end
 
@@ -371,9 +371,9 @@ function ShopController:KnitStart()
 		self:UpdateTimerDisplay()
 	end))
 	
-	table.insert(self._connections, DataController.onReplicated("Abilities"):Connect(function()
+	table.insert(self._connections, DataController.onReplicated("SurvivorPerks"):Connect(function()
 		if currentTab == "Survivor" then
-			self:UpdateAbilitiesUI()
+			self:UpdateSurvivorPerksUI()
 		end
 	end))
 
@@ -385,7 +385,7 @@ function ShopController:KnitInit()
 	self:Cleanup()
 	DataController = Knit.GetController("DataController")
 	PerkShopService = Knit.GetService("ShopService")
-	AbilitiesService = Knit.GetService("AbilitiesService")
+	SurvivorPerksService = Knit.GetService("SurvivorPerksService")
 end
 
 return ShopController

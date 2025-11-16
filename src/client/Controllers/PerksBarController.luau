@@ -6,12 +6,13 @@ local Packages = ReplicatedStorage.Packages
 local Shared = ReplicatedStorage.Shared
 
 local Knit = require(Packages.Knit)
-local PerksEnums = require(Shared.Data.PerkEnums)
-local AbilitiesEnums = require(Shared.Data.AbilitiesEnums)
+local KillerPerks = require(Shared.Data.KillerPerks)
+local SurvivorPerks = require(Shared.Data.SurvivorPerks)
 
 local DataController
 local DataService
 local RoleShowController
+local PerkEffectsService
 
 local UtilBarController = Knit.CreateController({
 	Name = "UtilBarController",
@@ -23,7 +24,7 @@ local mainGui = playerGui:WaitForChild("Main")
 local framesFolder = mainGui:WaitForChild("Frames")
 local bottomContainer = mainGui:WaitForChild("BottomContainer")
 
-local AbilitiesTemplate = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("UIAssets"):WaitForChild("AbilitiesTemplate")
+local PerksTemplate = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("UIAssets"):WaitForChild("AbilitiesTemplate")
 
 local keyBindings = {
 	[Enum.KeyCode.R] = "Slot1",
@@ -36,10 +37,10 @@ function UtilBarController:UseAbility(slotName)
 	if not playerData then return end
 
 	local isKiller = RoleShowController:IsKiller()
-	if not isKiller then
+	if isKiller then
 		return self:UseKillerPerks(slotName)
 	else
-		return self:UseSurvivorAbility(slotName)
+		return self:UseSurvivorPerks(slotName)
 	end
 end
 
@@ -50,26 +51,52 @@ function UtilBarController:UseKillerPerks(slotName)
 	local PerksSlot = playerData.Perks[slotName]
 	if not PerksSlot or PerksSlot.Name == "" or PerksSlot.Quantity <= 0 then return end
 
-	local PerksData = PerksEnums[PerksSlot.Name]
+	local PerksData = KillerPerks[PerksSlot.Name]
 	if not PerksData then return end
 
-	local success, message = DataService:UsePerks(slotName):await()
-	if success then
-		self:PerformEffect(PerksSlot.Name, "Perks")
-	end
+	-- Use perk on DataService (handles inventory)
+	DataService:UseKillerPerk(slotName):andThen(function(success, message)
+		if success then
+			-- Activate server-side effect
+			PerkEffectsService:UsePerk(PerksSlot.Name, true):andThen(function(effectSuccess)
+				if not effectSuccess then
+					warn("Failed to activate killer perk effect:", PerksSlot.Name)
+				end
+			end):catch(function(err)
+				warn("Error activating killer perk:", err)
+			end)
+		else
+			warn("Failed to use killer perk:", message)
+		end
+	end):catch(function(err)
+		warn("Error using killer perk:", err)
+	end)
 end
 
-function UtilBarController:UseSurvivorAbility(slotName)
+function UtilBarController:UseSurvivorPerks(slotName)
 	local playerData = DataController.getData()
-	if not playerData or not playerData.Abilities then return end
+	if not playerData or not playerData.SurvivorPerks then return end
 
-	local AbilitySlot = playerData.Abilities[slotName]
-	if not AbilitySlot or AbilitySlot.Name == "" then return end
+	local PerkSlot = playerData.SurvivorPerks[slotName]
+	if not PerkSlot or PerkSlot.Name == "" then return end
 
-	local success, message = DataService:UseAbility(slotName):await()
-	if success then
-		self:PerformEffect(AbilitySlot.Name, "Abilities")
-	end
+	-- Use perk on DataService (handles inventory)
+	DataService:UseSurvivorPerk(slotName):andThen(function(success, message)
+		if success then
+			-- Activate server-side effect
+			PerkEffectsService:UsePerk(PerkSlot.Name, false):andThen(function(effectSuccess)
+				if not effectSuccess then
+					warn("Failed to activate survivor perk effect:", PerkSlot.Name)
+				end
+			end):catch(function(err)
+				warn("Error activating survivor perk:", err)
+			end)
+		else
+			warn("Failed to use survivor perk:", message)
+		end
+	end):catch(function(err)
+		warn("Error using survivor perk:", err)
+	end)
 end
 
 function UtilBarController:UpdateUI()
@@ -86,12 +113,22 @@ function UtilBarController:UpdateUI()
 
 	local slotOrder = {"Slot1", "Slot2", "Slot3"}
 	for _, slotName in ipairs(slotOrder) do
-		local slot = not isKiller and playerData.Perks and playerData.Perks[slotName] 
-			or playerData.Abilities and playerData.Abilities[slotName]
+		local slot = isKiller and playerData.Perks and playerData.Perks[slotName] 
+			or playerData.SurvivorPerks and playerData.SurvivorPerks[slotName]
 		
 		if not slot then continue end
+		
+		if not PerksTemplate then
+			warn("[PerksBarController] PerksTemplate not found!")
+			return
+		end
 
-		local newTemplate = AbilitiesTemplate:Clone()
+		local newTemplate = PerksTemplate:Clone()
+		if not newTemplate then
+			warn("[PerksBarController] Failed to clone PerksTemplate")
+			continue
+		end
+		
 		newTemplate.Name = "PerksSlot" .. slotName
 		newTemplate.Visible = true
 
@@ -106,7 +143,7 @@ function UtilBarController:UpdateUI()
 		end
 
 		if slot.Name ~= "" and slot.Quantity and slot.Quantity > 0 then
-			local itemData = not isKiller and PerksEnums[slot.Name] or AbilitiesEnums[slot.Name]
+			local itemData = isKiller and KillerPerks[slot.Name] or SurvivorPerks[slot.Name]
 			if itemData then
 				local imageLabel = newTemplate:FindFirstChild("ImageLabel")
 				if imageLabel and imageLabel:IsA("ImageLabel") then
@@ -125,26 +162,12 @@ function UtilBarController:UpdateUI()
 				end
 				
 				newTemplate.Parent = bottomContainer
+			else
+				warn("[PerksBarController] Item data not found for:", slot.Name)
+				newTemplate:Destroy()
 			end
 		else
 			newTemplate:Destroy()
-		end
-	end
-end
-
-function UtilBarController:PerformEffect(name, category)
-	local modulePath = script.Parent.Parent.Modules[category][name]
-	local success, module = pcall(function()
-		return require(modulePath)
-	end)
-
-	if success and module and module.Execute then
-		if name == "Invisibility" then
-			task.spawn(function()
-				module.Execute()
-			end)
-		else
-			module.Execute()
 		end
 	end
 end
@@ -162,7 +185,7 @@ function UtilBarController:KnitStart()
 		self:UpdateUI()
 	end)
 
-	DataController.onReplicated("Abilities"):Connect(function()
+	DataController.onReplicated("SurvivorPerks"):Connect(function()
 		self:UpdateUI()
 	end)
 
@@ -188,6 +211,7 @@ function UtilBarController:KnitInit()
 	DataController = Knit.GetController("DataController")
 	DataService = Knit.GetService("DataService")
 	RoleShowController = Knit.GetController("RoleShowController")
+	PerkEffectsService = Knit.GetService("PerkEffectsService")
 end
 
 return UtilBarController

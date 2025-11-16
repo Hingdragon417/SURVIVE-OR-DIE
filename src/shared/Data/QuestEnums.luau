@@ -34,9 +34,9 @@ return {
 		Reward = 250,
 		RewardType = "Cash",
 	},
-	["Use 10 Abilities"] = {
+	["Use 10 Perks"] = {
 		Type = "Both",
-		Description = "Use 10 abilities or perks in total",
+		Description = "Use 10 perks in total",
 		Goal = 10,
 		Reward = 200,
 		RewardType = "Cash",

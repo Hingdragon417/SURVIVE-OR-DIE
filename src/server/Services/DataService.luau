@@ -12,7 +12,7 @@ local Types = require(Shared.Types)
 local DATA_TEMPLATE = require(Shared.Data.Template)
 
 local IS_STUDIO = RunService:IsStudio()
-local STORE_NAME = if IS_STUDIO then "TESTSTUDI2O22122221211" else "TESTGAME11111"
+local STORE_NAME = if IS_STUDIO then "TESTSTUDI2O221222221211" else "TESTGAME11111"
 local STORE_VERSION = if IS_STUDIO then "1.2.7" else "1.1.0"
 local METADATA_INDEX_VERSION = if IS_STUDIO then "STUDIO_DATA_VERSION" else "GAME_DATA_VERSION"
 local SHOULD_SAVE = true
@@ -175,34 +175,34 @@ function DataService:UpdatePlayerData(player: Player, data)
 	return false
 end
 
-function DataService.Client:UseAbility(player: Player, slotName: string)
+function DataService.Client:UseSurvivorPerk(player: Player, slotName: string)
 	local session = DataService.getSession(player)
-	if not session or not session.Data.Abilities then
+	if not session or not session.Data.SurvivorPerks then
 		return false, "No player data found"
 	end
 
-	local abilitySlot = session.Data.Abilities[slotName]
-	if not abilitySlot or abilitySlot.Name == "" or abilitySlot.Quantity <= 0 then
-		return false, "No ability found in slot"
+	local perkSlot = session.Data.SurvivorPerks[slotName]
+	if not perkSlot or perkSlot.Name == "" or perkSlot.Quantity <= 0 then
+		return false, "No survivor perk found in slot"
 	end
 
-	abilitySlot.Quantity -= 1
+	perkSlot.Quantity -= 1
 	
-	if abilitySlot.Quantity <= 0 then
-		abilitySlot.Name = ""
-		abilitySlot.Quantity = 0
+	if perkSlot.Quantity <= 0 then
+		perkSlot.Name = ""
+		perkSlot.Quantity = 0
 	end
 	
 	local QuestService = Knit.GetService("QuestService")
 	if QuestService then
-		QuestService:UpdateProgress(player, "Use 10 Abilities", 1)
+		QuestService:UpdateProgress(player, "Use 10 Perks", 1)
 	end
 	
-	DataService:Replicate(player, "Abilities")
+	DataService:Replicate(player, "SurvivorPerks")
 	return true, "Success"
 end
 
-function DataService.Client:UsePerks(player: Player, slotName: string)
+function DataService.Client:UseKillerPerk(player: Player, slotName: string)
 	local session = DataService.getSession(player)
 	if not session or not session.Data.Perks then
 		return false, "No player data found"
@@ -222,7 +222,7 @@ function DataService.Client:UsePerks(player: Player, slotName: string)
 	
 	local QuestService = Knit.GetService("QuestService")
 	if QuestService then
-		QuestService:UpdateProgress(player, "Use 10 Abilities", 1)
+		QuestService:UpdateProgress(player, "Use 10 Perks", 1)
 	end
 	
 	DataService:Replicate(player, "Perks")

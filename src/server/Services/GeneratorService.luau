@@ -27,6 +27,9 @@ local generatorCooldowns = {}
 local playerGeneratorLocks = {}
 local RoundService
 local QuestService
+local DataService
+local generatorsFrozen = false
+local generatorsFrozenEnd = 0
 
 local function createHighlight(parent: Instance, fillColor: Color3, fillTransparency: number, duration: number)
     local highlight = Instance.new("Highlight")
@@ -157,9 +160,27 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
         return nil
     end
     
+    if generatorsFrozen and os.time() < generatorsFrozenEnd then
+        warn("[GeneratorService] Generators are frozen, rejecting progress")
+        return nil
+    end
+    
     if playerRoles[player] ~= "Survivor" then
         warn("[GeneratorService] Player", player.Name, "is not a Survivor (role:", playerRoles[player], "), rejecting progress")
         return nil
+    end
+    
+    if not DataService then
+        DataService = Knit.GetService("DataService")
+    end
+    
+    local session = DataService.getSession(player)
+    if session and session.Data._quickFixActive then
+        local SurvivorPerks = require(ReplicatedStorage.Shared.Data.SurvivorPerks)
+        local quickFixData = SurvivorPerks["Quick Fix"]
+        if quickFixData and quickFixData.RepairBoost then
+            amount = amount * quickFixData.RepairBoost
+        end
     end
     
     local currentProgress = self.Server:GetProgress(generatorId)
@@ -231,6 +252,15 @@ function GeneratorService.Client:ReportSlowClick(player: Player, generatorId: st
         
         playerSlowClickCount[player.UserId] = 0
     end
+end
+
+function GeneratorService:FreezeGenerators(duration: number)
+    generatorsFrozen = true
+    generatorsFrozenEnd = os.time() + duration
+    
+    task.delay(duration, function()
+        generatorsFrozen = false
+    end)
 end
 
 local RoundService
