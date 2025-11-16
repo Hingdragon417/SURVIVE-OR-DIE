@@ -158,11 +158,16 @@ function QuestService:CompleteQuest(player: Player, questName: string)
     local questData = QuestEnums[questName]
     if not questData or not DataService then return end
     
-    DataService:AddCash(player, questData.Reward)
-    
+    -- Add cash reward
     local session = DataService.getSession(player)
-    if session and session.Data and session.Data.QuestProgress then
-        session.Data.QuestProgress[questName] = 0
+    if session and session.Data then
+        session.Data.Cash = session.Data.Cash + questData.Reward
+        DataService:Replicate(player, "Cash")
+        
+        -- Reset quest progress
+        if session.Data.QuestProgress then
+            session.Data.QuestProgress[questName] = 0
+        end
     end
 end
 

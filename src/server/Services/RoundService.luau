@@ -25,6 +25,12 @@ RoundService.CompletedGenerators = {}
 RoundService.CompletedGeneratorCount = 0
 RoundService.CurrentMap = nil
 RoundService.PlayersInRound = {}
+RoundService.EscapedPlayers = {}
+RoundService.Killer = nil
+RoundService._gateConnections = {}
+RoundService._playerRemovedConnection = nil
+RoundService._roundActive = false
+RoundService._roundEnding = false
 
 function RoundService:GetRandomMaps()
     local maps = ReplicatedStorage.Maps:GetChildren()
@@ -87,7 +93,7 @@ function RoundService:SetStatus(newStatus)
             self.SelectedMaps = self:GetRandomMaps()
             self:UpdateMapBoards(self.SelectedMaps)
             
-            for i = 10, 1, -1 do
+            for i = 20, 1, -1 do
                 self.Status = string.format("Intermission (%d)", i)
                 self.Client.StatusChanged:FireAll(self.Status)
                 task.wait(1)
@@ -97,18 +103,26 @@ function RoundService:SetStatus(newStatus)
         elseif newStatus == "RoundStarting" then
             local winningMap = self:GetWinningMap()
             if winningMap then
+                self._roundActive = false
+                self._roundEnding = false
+                
                 self:LoadMap(winningMap.Name)
                 local killer = self:SelectKiller()
+                self.Killer = killer
                 
                 local GeneratorService = Knit.GetService("GeneratorService")
                 
                 table.clear(self.PlayersInRound)
+                table.clear(self.EscapedPlayers)
                 for _, player in Players:GetPlayers() do
                     table.insert(self.PlayersInRound, player)
                     local role = if player == killer then "Killer" else "Survivor"
                     self.Client.RoleAssigned:Fire(player, role)
                     GeneratorService:SetPlayerRole(player, role)
                 end
+                
+                self:SetupGateEscape()
+                self:SetupPlayerTracking()
                 
                 task.wait(3)
                 self:SpawnPlayers(Workspace:FindFirstChild(winningMap.Name), killer)
@@ -118,7 +132,13 @@ function RoundService:SetStatus(newStatus)
                 self:SetStatus("Intermission")
             end
         elseif newStatus == "RoundInProgress" then
+            self._roundActive = true
+            
             for i = 300, 1, -1 do
+                if not self._roundActive then
+                    return
+                end
+                
                 local minutes = math.floor(i / 60)
                 local seconds = i % 60
                 self.Status = string.format("Round (%d:%02d)", minutes, seconds)
@@ -126,8 +146,9 @@ function RoundService:SetStatus(newStatus)
                 task.wait(1)
             end
             
-            self:CleanupRound()
-            self:SetStatus("Intermission")
+            if self._roundActive then
+                self:EndRound("Time Up!", "TimeUp")
+            end
         else
             self.Status = newStatus
             self.Client.StatusChanged:FireAll(self.Status)
@@ -255,7 +276,191 @@ function RoundService:SpawnPlayers(map, killer)
     end
 end
 
+function RoundService:RemovePlayerFromRound(player: Player)
+    for i, p in ipairs(self.PlayersInRound) do
+        if p == player then
+            table.remove(self.PlayersInRound, i)
+            break
+        end
+    end
+    
+    -- Check if round should end (only if round is active and not already ending)
+    if self._roundActive and not self._roundEnding then
+        task.spawn(function()
+            task.wait(0.1) -- Small delay to batch multiple deaths
+            if self._roundActive and not self._roundEnding then
+                self:CheckRoundEnd()
+            end
+        end)
+    end
+end
+
+function RoundService:TeleportToLobby(player: Player)
+    local lobby = Workspace:FindFirstChild("Lobby")
+    if lobby and player.Character then
+        local spawnPoint = lobby:FindFirstChild("TP")
+        if spawnPoint then
+            player.Character:PivotTo(spawnPoint.CFrame)
+        end
+    end
+end
+
+function RoundService:SetupPlayerTracking()
+    -- Disconnect old connection if exists
+    if self._playerRemovedConnection then
+        self._playerRemovedConnection:Disconnect()
+    end
+    
+    -- Track player leaving
+    self._playerRemovedConnection = Players.PlayerRemoving:Connect(function(player)
+        if not self._roundActive or self._roundEnding then return end
+        
+        -- Check if it's the killer leaving
+        if player == self.Killer then
+            self:EndRound("Killer Left", "KillerLeft")
+        else
+            self:RemovePlayerFromRound(player)
+        end
+    end)
+    
+    -- Track player deaths
+    for _, player in Players:GetPlayers() do
+        if player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.Died:Connect(function()
+                    if not self._roundActive or self._roundEnding then return end
+                    
+                    if player ~= self.Killer then
+                        self:RemovePlayerFromRound(player)
+                        task.wait(1)
+                        self:TeleportToLobby(player)
+                    end
+                end)
+            end
+        end
+    end
+end
+
+function RoundService:SetupGateEscape()
+    -- Clean up old connections
+    for _, connection in self._gateConnections do
+        connection:Disconnect()
+    end
+    table.clear(self._gateConnections)
+    
+    if not self.CurrentMap then return end
+    
+    local mapInWorkspace = Workspace:FindFirstChild(self.CurrentMap)
+    if not mapInWorkspace then return end
+    
+    local gate = mapInWorkspace:FindFirstChild("Gate")
+    if not gate then return end
+    
+    local touchPart = gate:FindFirstChild("TouchPart")
+    if not touchPart then return end
+    
+    local escapeDebounce = {}
+    
+    local connection = touchPart.Touched:Connect(function(hit)
+        local player = Players:GetPlayerFromCharacter(hit.Parent)
+        if not player then return end
+        
+        -- Debounce check
+        if escapeDebounce[player] then return end
+        
+        -- Check if round is active
+        if not self._roundActive or self._roundEnding then return end
+        
+        -- Check if player is a survivor and all gens are done
+        if player ~= self.Killer and self.CompletedGeneratorCount >= 5 then
+            -- Check if not already escaped and still in round
+            if not table.find(self.EscapedPlayers, player) and table.find(self.PlayersInRound, player) then
+                escapeDebounce[player] = true
+                table.insert(self.EscapedPlayers, player)
+                
+                -- Give 100 cash
+                if self._dataService then
+                    local success, err = pcall(function()
+                        local session = self._dataService.getSession(player)
+                        if session and session.Data then
+                            session.Data.Cash = session.Data.Cash + 100
+                            self._dataService:Replicate(player, "Cash")
+                        end
+                    end)
+                    if not success then
+                        warn("[RoundService] Failed to add cash:", err)
+                    end
+                end
+                
+                -- Remove from round
+                self:RemovePlayerFromRound(player)
+                
+                -- Teleport to lobby
+                task.wait(0.5)
+                self:TeleportToLobby(player)
+            end
+        end
+    end)
+    
+    table.insert(self._gateConnections, connection)
+end
+
+function RoundService:CheckRoundEnd()
+    if not self._roundActive or self._roundEnding then return end
+    
+    -- Count survivors still in round (not including killer)
+    local survivorsLeft = 0
+    for _, player in self.PlayersInRound do
+        if player ~= self.Killer then
+            survivorsLeft += 1
+        end
+    end
+    
+    -- If no survivors left in round
+    if survivorsLeft == 0 then
+        -- Check if any survivors escaped
+        if #self.EscapedPlayers > 0 then
+            self:EndRound("Survivors Escaped!", "SurvivorWin")
+        else
+            self:EndRound("Killer Wins!", "KillerWin")
+        end
+    end
+end
+
+function RoundService:EndRound(message: string, reason: string)
+    if self._roundEnding then return end
+    
+    self._roundEnding = true
+    self._roundActive = false
+    
+    self.Status = message
+    self.Client.StatusChanged:FireAll(self.Status)
+    
+    task.wait(3)
+    
+    self:CleanupRound()
+    self:SetStatus("Intermission")
+end
+
 function RoundService:CleanupRound()
+    -- Disconnect gate connections
+    for _, connection in self._gateConnections do
+        connection:Disconnect()
+    end
+    table.clear(self._gateConnections)
+    
+    -- Disconnect player tracking
+    if self._playerRemovedConnection then
+        self._playerRemovedConnection:Disconnect()
+        self._playerRemovedConnection = nil
+    end
+    
+    -- Teleport all players back to lobby
+    for _, player in Players:GetPlayers() do
+        self:TeleportToLobby(player)
+    end
+    
     for _, child in Workspace:GetChildren() do
         if ReplicatedStorage.Maps:FindFirstChild(child.Name) then
             child:Destroy()
@@ -271,6 +476,10 @@ function RoundService:CleanupRound()
     self.Client.GeneratorsCompleted:FireAll(0)
     self.CurrentMap = nil
     table.clear(self.PlayersInRound)
+    table.clear(self.EscapedPlayers)
+    self.Killer = nil
+    self._roundActive = false
+    self._roundEnding = false
 end
 
 function RoundService:MarkGeneratorCompleted(generatorId: string)
