@@ -32,4 +32,8 @@ return {
         }
     },
 
+    ActiveQuests = {},
+    QuestProgress = {},
+    LastQuestResetTime = 0,
+
 }

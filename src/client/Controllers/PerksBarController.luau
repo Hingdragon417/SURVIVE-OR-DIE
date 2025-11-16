@@ -21,10 +21,9 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local mainGui = playerGui:WaitForChild("Main")
 local framesFolder = mainGui:WaitForChild("Frames")
-local utilityFrame = mainGui:WaitForChild("Utility")
-local centerFrame = utilityFrame:WaitForChild("Center")
+local bottomContainer = mainGui:WaitForChild("BottomContainer")
 
-local PerksTemplate = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("UIAssets"):WaitForChild("PerkBarTemplate")
+local AbilitiesTemplate = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("UIAssets"):WaitForChild("AbilitiesTemplate")
 
 local keyBindings = {
 	[Enum.KeyCode.R] = "Slot1",
@@ -79,7 +78,7 @@ function UtilBarController:UpdateUI()
 
 	local isKiller = RoleShowController:IsKiller() or false
 	
-	for _, child in pairs(centerFrame:GetChildren()) do
+	for _, child in pairs(bottomContainer:GetChildren()) do
 		if child:IsA("GuiObject") and child.Name:find("PerksSlot") then
 			child:Destroy()
 		end
@@ -92,12 +91,12 @@ function UtilBarController:UpdateUI()
 		
 		if not slot then continue end
 
-		local newTemplate = PerksTemplate:Clone()
+		local newTemplate = AbilitiesTemplate:Clone()
 		newTemplate.Name = "PerksSlot" .. slotName
 		newTemplate.Visible = true
 
 		local keybindLabel = newTemplate:FindFirstChild("Keybind")
-		if keybindLabel then
+		if keybindLabel and keybindLabel:IsA("TextLabel") then
 			for keyCode, bindSlot in pairs(keyBindings) do
 				if bindSlot == slotName then
 					keybindLabel.Text = keyCode.Name
@@ -110,8 +109,13 @@ function UtilBarController:UpdateUI()
 			local itemData = not isKiller and PerksEnums[slot.Name] or AbilitiesEnums[slot.Name]
 			if itemData then
 				local imageLabel = newTemplate:FindFirstChild("ImageLabel")
-				if imageLabel then
+				if imageLabel and imageLabel:IsA("ImageLabel") then
 					imageLabel.Image = "rbxassetid://" .. itemData.Image
+				end
+				
+				local nameLabel = newTemplate:FindFirstChild("Name")
+				if nameLabel and nameLabel:IsA("TextLabel") then
+					nameLabel.Text = slot.Name
 				end
 
 				local quantityLabel = newTemplate:FindFirstChild("Quantity")
@@ -120,7 +124,7 @@ function UtilBarController:UpdateUI()
 					quantityLabel.Visible = true
 				end
 				
-				newTemplate.Parent = centerFrame
+				newTemplate.Parent = bottomContainer
 			end
 		else
 			newTemplate:Destroy()

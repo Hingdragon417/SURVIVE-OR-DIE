@@ -21,9 +21,39 @@ local function updateStatusDisplay(status)
         return 
     end
     
-    local statusLabel = mainGui:FindFirstChild("Status", true)
-    if statusLabel and statusLabel:IsA("TextLabel") then
-        statusLabel.Text = status
+    local topContainer = mainGui:FindFirstChild("TopContainer")
+    if not topContainer then
+        return
+    end
+    
+    local timer = topContainer:FindFirstChild("Timer")
+    if not timer then
+        return
+    end
+    
+    local title = timer:FindFirstChild("Title")
+    local subtitle = timer:FindFirstChild("Subtitle")
+    
+    -- Parse the status string (e.g., "Round (4:32)" or "Intermission (10)")
+    local statusType, time = status:match("^(.-)%s*%((.-)%)$")
+    
+    if statusType and time then
+        if title and title:IsA("TextLabel") then
+            title.Text = statusType
+        end
+        
+        if subtitle and subtitle:IsA("TextLabel") then
+            subtitle.Text = time
+        end
+    else
+        -- Fallback if format doesn't match
+        if title and title:IsA("TextLabel") then
+            title.Text = status
+        end
+        
+        if subtitle and subtitle:IsA("TextLabel") then
+            subtitle.Text = ""
+        end
     end
 end
 
@@ -33,14 +63,19 @@ local function updateGeneratorDisplay(completedCount)
         return 
     end
     
-    local statusContainer = mainGui:FindFirstChild("StatusContainer")
-    if not statusContainer then
+    local topContainer = mainGui:FindFirstChild("TopContainer")
+    if not topContainer then
         return
     end
     
-    local gensLabel = statusContainer:FindFirstChild("Gens")
-    if gensLabel and gensLabel:IsA("TextLabel") then
-        gensLabel.Text = string.format("%d/5 Generators", completedCount)
+    local timer = topContainer:FindFirstChild("Timer")
+    if not timer then
+        return
+    end
+    
+    local generators = timer:FindFirstChild("Generators")
+    if generators and generators:IsA("TextLabel") then
+        generators.Text = string.format("%d/5 Generators", completedCount)
     end
 end
 

@@ -1,4 +1,5 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local Packages = ReplicatedStorage.Packages
 
@@ -11,6 +12,8 @@ local KnifeService = Knit.CreateService({
     },
     _attackDebounce = {}
 })
+
+local QuestService
 
 function KnifeService.Client:KnifeAttack(player: Player)
     if KnifeService._attackDebounce[player.UserId] then
@@ -90,6 +93,16 @@ function KnifeService.Client:KnifeAttack(player: Player)
                 local humanoid = hit.Parent:FindFirstChild("Humanoid")
                 if humanoid then
                     humanoid:TakeDamage(40)
+                    
+                    if humanoid.Health <= 0 then
+                        if not QuestService then
+                            QuestService = Knit.GetService("QuestService")
+                        end
+                        
+                        if QuestService then
+                            QuestService:UpdateProgress(player, "Eliminate 5 Survivors", 1)
+                        end
+                    end
                 end
             end
         end
@@ -105,7 +118,8 @@ end
 function KnifeService:KnitStart()
 end
 
-function KnifeService:KnitInit() 
+function KnifeService:KnitInit()
+    QuestService = Knit.GetService("QuestService")
 end
 
 return KnifeService

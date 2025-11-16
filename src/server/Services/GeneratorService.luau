@@ -26,6 +26,7 @@ local playerRoles = {}
 local generatorCooldowns = {}
 local playerGeneratorLocks = {}
 local RoundService
+local QuestService
 
 local function createHighlight(parent: Instance, fillColor: Color3, fillTransparency: number, duration: number)
     local highlight = Instance.new("Highlight")
@@ -180,6 +181,14 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
             RoundService:MarkGeneratorCompleted(generatorName)
         end
         
+        if not QuestService then
+            QuestService = Knit.GetService("QuestService")
+        end
+        
+        if QuestService and playerRoles[player] == "Survivor" then
+            QuestService:UpdateProgress(player, "Complete 5 Generators", 1)
+        end
+        
         self.GeneratorCompleted:FireAll(generatorId)
     end
     
@@ -249,6 +258,7 @@ end
 
 function GeneratorService:KnitInit()
     RoundService = Knit.GetService("RoundService")
+    QuestService = Knit.GetService("QuestService")
 end
 
 return GeneratorService
