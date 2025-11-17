@@ -2,8 +2,8 @@ return {
     ["Invisibility"] = {
         Image = 133355043444426,
         MaxAmount = 1,
-        Price = 300,
-        Cooldown = 5,
+        Price = 175,
+        Cooldown = 20,
         Duration = 3,
         Name = "Invisibility",
         Description = "Become invisible for a short duration.",
@@ -11,8 +11,8 @@ return {
 	["Heal"] = {
 		Image = 133355043444426,
 		MaxAmount = 2,
-		Price = 200,
-		Cooldown = 10,
+		Price = 100,
+		Cooldown = 15,
 		Name = "Heal",
 		Description = "Instantly heal 50 HP.",
 		HealAmount = 50,
@@ -20,8 +20,8 @@ return {
 	["Sprint Burst"] = {
 		Image = 114124336527832,
 		MaxAmount = 2,
-		Price = 275,
-		Cooldown = 15,
+		Price = 150,
+		Cooldown = 18,
 		Name = "Sprint Burst",
 		Description = "Massive speed boost for a short time.",
 		Duration = 3,
@@ -30,8 +30,8 @@ return {
 	["Quick Fix"] = {
 		Image = 133355043444426,
 		MaxAmount = 3,
-		Price = 150,
-		Cooldown = 8,
+		Price = 75,
+		Cooldown = 12,
 		Name = "Quick Fix",
 		Description = "Repair generators 100% faster for 10 seconds.",
 		Duration = 10,

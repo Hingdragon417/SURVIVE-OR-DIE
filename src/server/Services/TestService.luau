@@ -9,8 +9,6 @@ local TestService = Knit.CreateService({
     Client = {}
 })
 
-
-
 function TestService:KnitStart()
 
 end

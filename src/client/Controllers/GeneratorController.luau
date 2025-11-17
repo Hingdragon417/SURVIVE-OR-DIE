@@ -298,7 +298,6 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
         self:CloseGenerator()
     end
     
-    -- Get progress from server
     GeneratorService:GetProgress(generatorId):andThen(function(progress)
         if type(progress) == "number" and currentGenerator == generatorId then
             setProgressBarImmediate(progress)
@@ -307,7 +306,6 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
         warn("[GeneratorController] Failed to get progress:", err)
     end)
     
-    -- Get time limit from server
     GeneratorService:GetButtonTimeLimit():andThen(function(limit)
         if type(limit) == "number" then
             buttonTimeLimit = limit
@@ -333,10 +331,8 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
     
     generatorFrame.Visible = true
     
-    -- Wait for UI to render and be ready
     RunService.RenderStepped:Wait()
     
-    -- Initial progress will be set asynchronously by the Promise callback
     setProgressBarImmediate(0)
     
     spawnButton(clickBox)
@@ -363,7 +359,6 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
         end
     end)
     
-    -- Request immediate progress sync from server to ensure we have the latest value
     GeneratorService:GetProgress(generatorId):andThen(function(currentProgress)
         if type(currentProgress) == "number" and generatorId == currentGenerator then
             setProgressBarImmediate(currentProgress)

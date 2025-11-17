@@ -12,7 +12,8 @@ local RoundService = Knit.CreateService({
         StatusChanged = Knit.CreateSignal(),
         VoteChanged = Knit.CreateSignal(),
         RoleAssigned = Knit.CreateSignal(),
-        GeneratorsCompleted = Knit.CreateSignal()
+        GeneratorsCompleted = Knit.CreateSignal(),
+        PerksEnabled = Knit.CreateSignal()
     },
     Status = "Waiting",
     _connections = {}
@@ -337,6 +338,10 @@ function RoundService:SpawnPlayers(map, killer)
             player.Character:PivotTo(randomSpawn.CFrame)
         end
     end
+    
+    for _, player in Players:GetPlayers() do
+        self.Client.PerksEnabled:Fire(player, true)
+    end
 end
 
 function RoundService:RemovePlayerFromRound(player: Player)
@@ -363,6 +368,7 @@ function RoundService:TeleportToLobby(player: Player)
         local spawnPoint = lobby:FindFirstChild("TP")
         if spawnPoint then
             player.Character:PivotTo(spawnPoint.CFrame)
+            self.Client.PerksEnabled:Fire(player, false)
         end
     end
 end
@@ -436,8 +442,8 @@ function RoundService:SetupGateEscape()
                     pcall(function()
                         local session = self._dataService.getSession(player)
                         if session and session.Data then
-                            session.Data.Cash = session.Data.Cash + 100
-                            self._dataService:Replicate(player, "Cash")
+                            session.Data.Coins = session.Data.Coins + 100
+                            self._dataService:Replicate(player, "Coins")
                         end
                     end)
                 end

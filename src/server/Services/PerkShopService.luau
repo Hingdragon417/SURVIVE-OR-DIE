@@ -24,7 +24,6 @@ function ShopService:GenerateShopItems()
 		table.insert(availablePerks, { name = perkName, data = perkData })
 	end
 
-	-- First, try to select items based on chance
 	local maxAttempts, attempts = 100, 0
 	while #shopItems < maxItems and attempts < maxAttempts do
 		attempts += 1
@@ -45,7 +44,6 @@ function ShopService:GenerateShopItems()
 		end
 	end
 
-	-- Ensure we always have exactly 3 items by filling remaining slots
 	if #shopItems < maxItems then
 		local unselectedPerks = {}
 		for _, perk in pairs(availablePerks) do
@@ -61,13 +59,11 @@ function ShopService:GenerateShopItems()
 			end
 		end
 		
-		-- Shuffle unselected perks for randomness
 		for i = #unselectedPerks, 2, -1 do
 			local j = math.random(i)
 			unselectedPerks[i], unselectedPerks[j] = unselectedPerks[j], unselectedPerks[i]
 		end
 		
-		-- Fill remaining slots until we have exactly 3 items
 		local remainingSlots = maxItems - #shopItems
 		for i = 1, math.min(remainingSlots, #unselectedPerks) do
 			table.insert(shopItems, unselectedPerks[i])
@@ -93,8 +89,8 @@ function ShopService.Client:PurchasePerk(player, perkName)
 		return false, "Out of stock or not available"
 	end
 
-	if session.Data.Cash < perkData.Price then
-		return false, "Not enough cash"
+	if session.Data.Coins < perkData.Price then
+		return false, "Not enough coins"
 	end
 
 	local availableSlot = nil
@@ -119,7 +115,7 @@ function ShopService.Client:PurchasePerk(player, perkName)
 		return false, "No available perk slots"
 	end
 
-	session.Data.Cash -= perkData.Price
+	session.Data.Coins -= perkData.Price
 	session.Data.Shop[perkName] = currentStock - 1
 
 	if session.Data.Perks[availableSlot].Name == perkName then
@@ -129,7 +125,7 @@ function ShopService.Client:PurchasePerk(player, perkName)
 		session.Data.Perks[availableSlot].Quantity = 1
 	end
 
-	DataService:Replicate(player, {"Cash", "Perks", "Shop"})
+	DataService:Replicate(player, {"Coins", "Perks", "Shop"})
 	return true, "Purchase successful"
 end
 

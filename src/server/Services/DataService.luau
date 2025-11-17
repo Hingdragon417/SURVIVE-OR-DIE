@@ -12,7 +12,7 @@ local Types = require(Shared.Types)
 local DATA_TEMPLATE = require(Shared.Data.Template)
 
 local IS_STUDIO = RunService:IsStudio()
-local STORE_NAME = if IS_STUDIO then "TESTSTUDI2O221222221211" else "TESTGAME11111"
+local STORE_NAME = if IS_STUDIO then "TESTSTUDIO2222232221211" else "TESTGAME11111"
 local STORE_VERSION = if IS_STUDIO then "1.2.7" else "1.1.0"
 local METADATA_INDEX_VERSION = if IS_STUDIO then "STUDIO_DATA_VERSION" else "GAME_DATA_VERSION"
 local SHOULD_SAVE = true
@@ -82,9 +82,18 @@ function DataService.onPlayerAdded(player: Player)
 	if session.RobloxMetaData[METADATA_INDEX_VERSION] ~= STORE_VERSION or not SHOULD_SAVE then
 		session.RobloxMetaData[METADATA_INDEX_VERSION] = STORE_VERSION
 		session.Data = TableUtil.DeepCopy(DATA_TEMPLATE)
+		print("[DataService] Reset data to template for", player.Name, "- Coins:", session.Data.Coins)
 	end
 
 	session:Reconcile()
+	
+	if not session.Data.Coins then
+		session.Data.Coins = DATA_TEMPLATE.Coins
+		print("[DataService] Added missing Coins for", player.Name, "- Value:", session.Data.Coins)
+	end
+	
+	print("[DataService] Final Coins for", player.Name, ":", session.Data.Coins)
+	
 	DataService._cache[player] = session
 	
 	task.wait(1)
@@ -115,11 +124,20 @@ function DataService:Replicate(player: Player, index: (string | { string })?)
 			self.Client.ReplicateData:Fire(player, {Shop = currentSession.Data.Shop}, "Shop")
 			task.wait()
 			self.Client.ReplicateData:Fire(player, {Perks = currentSession.Data.Perks}, "Perks")
+			
+			for _, key in ipairs(indices) do
+				if key ~= "Shop" and key ~= "Perks" then
+					self.Client.ReplicateData:Fire(player, {[key] = currentSession.Data[key]}, key)
+				end
+			end
 		else
 			for _, key in ipairs(indices) do
 				updateData[key] = currentSession.Data[key]
 			end
-			self.Client.ReplicateData:Fire(player, updateData, index)
+			
+			for _, key in ipairs(indices) do
+				self.Client.ReplicateData:Fire(player, {[key] = currentSession.Data[key]}, key)
+			end
 		end
 	end)
 end

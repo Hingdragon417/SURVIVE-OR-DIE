@@ -44,19 +44,16 @@ function QuestService:GenerateQuestsForPlayer(player: Player)
     
     local questNames = {}
     
-    -- Generate 1 Killer quest
     local killerQuest = getRandomQuest("Killer")
     if killerQuest then
         table.insert(questNames, killerQuest)
     end
     
-    -- Generate 1 Survivor quest
     local survivorQuest = getRandomQuest("Survivor")
     if survivorQuest then
         table.insert(questNames, survivorQuest)
     end
     
-    -- Generate 1 random quest from any type
     local allQuestNames = {}
     for questName, _ in pairs(QuestEnums) do
         table.insert(allQuestNames, questName)
@@ -67,12 +64,10 @@ function QuestService:GenerateQuestsForPlayer(player: Player)
         table.insert(questNames, randomQuestName)
     end
     
-    -- Save only quest names to player data
     session.Data.ActiveQuests = questNames
     session.Data.LastQuestResetTime = os.time()
     session.Data.QuestProgress = {}
     
-    -- Build full quest data for client
     local quests = {}
     for _, questName in questNames do
         table.insert(quests, {
@@ -81,29 +76,24 @@ function QuestService:GenerateQuestsForPlayer(player: Player)
         })
     end
     
-    -- Notify client
     self.Client.QuestsUpdated:Fire(player, quests, session.Data.LastQuestResetTime)
 end
 
 function QuestService:GetActiveQuests(player: Player)
     if not DataService then return {}, 0 end
     
-    -- Wait for session to be ready
     local session = DataService.waitForSession(player, 10)
     if not session or not session.Data then return {}, 0 end
     
-    -- Generate quests if player doesn't have any or if they need to be reset
     if not session.Data.ActiveQuests or not session.Data.LastQuestResetTime then
         self:GenerateQuestsForPlayer(player)
     else
-        -- Check if quests need to be reset (30 minutes have passed)
         local currentTime = os.time()
         if currentTime - session.Data.LastQuestResetTime >= RESET_INTERVAL then
             self:GenerateQuestsForPlayer(player)
         end
     end
     
-    -- Build full quest data from saved quest names
     local quests = {}
     if session.Data.ActiveQuests then
         for _, questName in session.Data.ActiveQuests do
@@ -143,7 +133,6 @@ function QuestService:UpdateProgress(player: Player, questName: string, amount: 
     
     session.Data.QuestProgress[questName] = progress
     
-    -- Fire the progress update signal to the specific player
     self.Client.ProgressUpdated:Fire(player, questName, progress)
     
     local questData = QuestEnums[questName]
@@ -158,13 +147,11 @@ function QuestService:CompleteQuest(player: Player, questName: string)
     local questData = QuestEnums[questName]
     if not questData or not DataService then return end
     
-    -- Add cash reward
     local session = DataService.getSession(player)
     if session and session.Data then
         session.Data.Cash = session.Data.Cash + questData.Reward
         DataService:Replicate(player, "Cash")
         
-        -- Reset quest progress
         if session.Data.QuestProgress then
             session.Data.QuestProgress[questName] = 0
         end
@@ -180,10 +167,9 @@ function QuestService.Client:GetPlayerProgress(player: Player)
 end
 
 function QuestService:KnitStart()
-    -- Check all players' quests periodically
     task.spawn(function()
         while true do
-            task.wait(30) -- Check every 30 seconds
+            task.wait(30)
             if DataService then
                 for _, player in Players:GetPlayers() do
                     local session = DataService.getSession(player)

@@ -13,6 +13,7 @@ local PerkEffectsController = Knit.CreateController({
 })
 
 local PerkEffectsService
+local activePerkConnection
 
 local function applyBlackout(duration: number)
     local colorCorrection = Instance.new("ColorCorrectionEffect")
@@ -100,7 +101,7 @@ local function showPlayers(duration: number)
 end
 
 function PerkEffectsController:KnitStart()
-    PerkEffectsService.ActivatePerk:Connect(function(perkName: string, duration: number)
+    activePerkConnection = PerkEffectsService.ActivatePerk:Connect(function(perkName: string, duration: number)
         if perkName == "Blackout" then
             applyBlackout(duration)
         elseif perkName == "FreezeGenerators" then
@@ -114,6 +115,10 @@ function PerkEffectsController:KnitStart()
 end
 
 function PerkEffectsController:KnitInit()
+    if activePerkConnection then
+        activePerkConnection:Disconnect()
+        activePerkConnection = nil
+    end
     PerkEffectsService = Knit.GetService("PerkEffectsService")
 end
 

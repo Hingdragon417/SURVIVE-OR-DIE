@@ -361,7 +361,7 @@ function ShopController:KnitStart()
 		end
 	end))
 
-	table.insert(self._connections, DataController.onReplicated("Cash"):Connect(function()
+	table.insert(self._connections, DataController.onReplicated("Coins"):Connect(function()
 		if currentTab == "Killer" then
 			self:UpdateShopUI()
 		end

@@ -457,7 +457,6 @@ function ButtonController:KnitInit()
     self:CleanupButtonConnections()
     isTransitioning = false
     currentFrame = nil
-    previousFrame = nil
 end
 
 return ButtonController

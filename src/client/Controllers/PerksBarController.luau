@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 
 local Packages = ReplicatedStorage.Packages
 local Shared = ReplicatedStorage.Shared
@@ -13,9 +14,14 @@ local DataController
 local DataService
 local RoleShowController
 local PerkEffectsService
+local RoundService
 
 local UtilBarController = Knit.CreateController({
 	Name = "UtilBarController",
+	_perksEnabled = false,
+	_cooldowns = {},
+	_cooldownConnections = {},
+	_connections = {},
 })
 
 local player = Players.LocalPlayer
@@ -33,6 +39,12 @@ local keyBindings = {
 }
 
 function UtilBarController:UseAbility(slotName)
+	if not self._perksEnabled then return end
+	
+	if self._cooldowns[slotName] and tick() < self._cooldowns[slotName] then
+		return
+	end
+	
 	local playerData = DataController.getData()
 	if not playerData then return end
 
@@ -54,10 +66,11 @@ function UtilBarController:UseKillerPerks(slotName)
 	local PerksData = KillerPerks[PerksSlot.Name]
 	if not PerksData then return end
 
-	-- Use perk on DataService (handles inventory)
 	DataService:UseKillerPerk(slotName):andThen(function(success, message)
 		if success then
-			-- Activate server-side effect
+			self._cooldowns[slotName] = tick() + PerksData.Cooldown
+			self:StartCooldownVisual(slotName, PerksData.Cooldown)
+			
 			PerkEffectsService:UsePerk(PerksSlot.Name, true):andThen(function(effectSuccess)
 				if not effectSuccess then
 					warn("Failed to activate killer perk effect:", PerksSlot.Name)
@@ -80,10 +93,14 @@ function UtilBarController:UseSurvivorPerks(slotName)
 	local PerkSlot = playerData.SurvivorPerks[slotName]
 	if not PerkSlot or PerkSlot.Name == "" then return end
 
-	-- Use perk on DataService (handles inventory)
+	local PerkData = SurvivorPerks[PerkSlot.Name]
+	if not PerkData then return end
+
 	DataService:UseSurvivorPerk(slotName):andThen(function(success, message)
 		if success then
-			-- Activate server-side effect
+			self._cooldowns[slotName] = tick() + PerkData.Cooldown
+			self:StartCooldownVisual(slotName, PerkData.Cooldown)
+			
 			PerkEffectsService:UsePerk(PerkSlot.Name, false):andThen(function(effectSuccess)
 				if not effectSuccess then
 					warn("Failed to activate survivor perk effect:", PerkSlot.Name)
@@ -97,6 +114,51 @@ function UtilBarController:UseSurvivorPerks(slotName)
 	end):catch(function(err)
 		warn("Error using survivor perk:", err)
 	end)
+end
+
+function UtilBarController:StartCooldownVisual(slotName, cooldownTime)
+	if self._cooldownConnections[slotName] then
+		self._cooldownConnections[slotName]:Disconnect()
+	end
+	
+	local endTime = tick() + cooldownTime
+	self._cooldowns[slotName] = endTime
+	
+	local function updateCooldownText()
+		local perkSlot = bottomContainer:FindFirstChild("PerksSlot" .. slotName)
+		if not perkSlot then return false end
+		
+		local keybindLabel = perkSlot:FindFirstChild("Keybind")
+		if not keybindLabel or not keybindLabel:IsA("TextLabel") then return false end
+		
+		local remaining = endTime - tick()
+		if remaining <= 0 then
+			self._cooldowns[slotName] = nil
+			for keyCode, bindSlot in pairs(keyBindings) do
+				if bindSlot == slotName then
+					keybindLabel.Text = keyCode.Name
+					keybindLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+					break
+				end
+			end
+			return false
+		else
+			keybindLabel.Text = tostring(math.ceil(remaining))
+			keybindLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+			return true
+		end
+	end
+	
+	local connection
+	connection = game:GetService("RunService").Heartbeat:Connect(function()
+		if not updateCooldownText() then
+			connection:Disconnect()
+			self._cooldownConnections[slotName] = nil
+		end
+	end)
+	
+	self._cooldownConnections[slotName] = connection
+	updateCooldownText()
 end
 
 function UtilBarController:UpdateUI()
@@ -133,10 +195,28 @@ function UtilBarController:UpdateUI()
 
 		local keybindLabel = newTemplate:FindFirstChild("Keybind")
 		if keybindLabel and keybindLabel:IsA("TextLabel") then
-			for keyCode, bindSlot in pairs(keyBindings) do
-				if bindSlot == slotName then
-					keybindLabel.Text = keyCode.Name
-					break
+			if self._cooldowns[slotName] then
+				local remaining = self._cooldowns[slotName] - tick()
+				if remaining > 0 then
+					keybindLabel.Text = tostring(math.ceil(remaining))
+					keybindLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+				else
+					self._cooldowns[slotName] = nil
+					for keyCode, bindSlot in pairs(keyBindings) do
+						if bindSlot == slotName then
+							keybindLabel.Text = keyCode.Name
+							keybindLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+							break
+						end
+					end
+				end
+			else
+				for keyCode, bindSlot in pairs(keyBindings) do
+					if bindSlot == slotName then
+						keybindLabel.Text = keyCode.Name
+						keybindLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+						break
+					end
 				end
 			end
 		end
@@ -154,16 +234,14 @@ function UtilBarController:UpdateUI()
 					nameLabel.Text = slot.Name
 				end
 
-				local quantityLabel = newTemplate:FindFirstChild("Quantity")
-				if quantityLabel then
-					quantityLabel.Text = "x" .. slot.Quantity
-					quantityLabel.Visible = true
-				end
-				
-				newTemplate.Visible = true
-				newTemplate.Parent = bottomContainer
-				
-				if newTemplate:IsA("TextButton") or newTemplate:IsA("ImageButton") then
+			local quantityLabel = newTemplate:FindFirstChild("Quantity")
+			if quantityLabel then
+				quantityLabel.Text = "x" .. slot.Quantity
+				quantityLabel.Visible = true
+			end
+			
+			newTemplate.Visible = self._perksEnabled
+			newTemplate.Parent = bottomContainer				if newTemplate:IsA("TextButton") or newTemplate:IsA("ImageButton") then
 					newTemplate.Activated:Connect(function()
 						self:UseAbility(slotName)
 					end)
@@ -179,35 +257,35 @@ function UtilBarController:UpdateUI()
 end
 
 function UtilBarController:KnitStart()
-	UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	table.insert(self._connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		local slotName = keyBindings[input.KeyCode]
 		if slotName then
 			self:UseAbility(slotName)
 		end
-	end)
+	end))
 
-	DataController.onReplicated("Perks"):Connect(function()
+	table.insert(self._connections, DataController.onReplicated("Perks"):Connect(function()
 		self:UpdateUI()
-	end)
+	end))
 
-	DataController.onReplicated("SurvivorPerks"):Connect(function()
+	table.insert(self._connections, DataController.onReplicated("SurvivorPerks"):Connect(function()
 		self:UpdateUI()
-	end)
+	end))
 
-	DataController.onReplicated("Shop"):Connect(function()
+	table.insert(self._connections, DataController.onReplicated("Shop"):Connect(function()
 		task.wait()
 		self:UpdateUI()
-	end)
+	end))
 
-	DataController.onReplicated("Cash"):Connect(function()
+	table.insert(self._connections, DataController.onReplicated("Coins"):Connect(function()
 		task.wait()
 		self:UpdateUI()
-	end)
+	end))
 
-	RoleShowController:OnRoleChanged(function()
+	table.insert(self._connections, RoleShowController:OnRoleChanged(function()
 		self:UpdateUI()
-	end)
+	end))
 
 	task.wait(1)
 	self:UpdateUI()
@@ -218,6 +296,28 @@ function UtilBarController:KnitInit()
 	DataService = Knit.GetService("DataService")
 	RoleShowController = Knit.GetController("RoleShowController")
 	PerkEffectsService = Knit.GetService("PerkEffectsService")
+	RoundService = Knit.GetService("RoundService")
+	
+	table.insert(self._connections, RoundService.PerksEnabled:Connect(function(enabled)
+		self._perksEnabled = enabled
+		self:UpdateUI()
+	end))
+end
+
+function UtilBarController:Cleanup()
+	for _, connection in pairs(self._connections) do
+		if connection and connection.Disconnect then
+			connection:Disconnect()
+		end
+	end
+	self._connections = {}
+	
+	for _, connection in pairs(self._cooldownConnections) do
+		if connection and connection.Disconnect then
+			connection:Disconnect()
+		end
+	end
+	self._cooldownConnections = {}
 end
 
 return UtilBarController

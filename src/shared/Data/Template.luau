@@ -1,5 +1,5 @@
 return {
-    Cash = 10000,
+    Coins = 10000,
     Shop = {},
     RestockTimer = 0,
     Perks = {

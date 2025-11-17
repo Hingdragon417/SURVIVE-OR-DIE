@@ -59,9 +59,9 @@ function SurvivorPerksService.Client:PurchaseSurvivorPerk(player: Player, perkNa
         return false, "Maximum amount reached"
     end
 
-    if data.Cash < abilityData.Price then
+    if data.Coins < abilityData.Price then
         SurvivorPerksService._purchaseLocks[lockKey] = false
-        return false, "Not enough cash"
+        return false, "Not enough coins"
     end
     
     if not availableSlot then
@@ -69,7 +69,7 @@ function SurvivorPerksService.Client:PurchaseSurvivorPerk(player: Player, perkNa
         return false, "No available slots"
     end
 
-    data.Cash -= abilityData.Price
+    data.Coins -= abilityData.Price
     
     if data.SurvivorPerks[availableSlot].Name == perkName then
         data.SurvivorPerks[availableSlot].Quantity += 1
@@ -78,7 +78,7 @@ function SurvivorPerksService.Client:PurchaseSurvivorPerk(player: Player, perkNa
         data.SurvivorPerks[availableSlot].Quantity = 1
     end
     
-    DataService:Replicate(player, {"Cash", "SurvivorPerks"})
+    DataService:Replicate(player, {"Coins", "SurvivorPerks"})
     
     task.delay(0.1, function()
         SurvivorPerksService._purchaseLocks[lockKey] = false

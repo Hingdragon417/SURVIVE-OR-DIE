@@ -30,6 +30,7 @@ local QuestService
 local DataService
 local generatorsFrozen = false
 local generatorsFrozenEnd = 0
+local playerRemovedConnection
 
 local function createHighlight(parent: Instance, fillColor: Color3, fillTransparency: number, duration: number)
     local highlight = Instance.new("Highlight")
@@ -80,7 +81,6 @@ function GeneratorService:StartCooldown(generatorId: string, generator: Instance
     end
     
     if primaryPart then
-
         for _, player in Players:GetPlayers() do
             if player.Character and player.Character.PrimaryPart then
                 local distance = (player.Character.PrimaryPart.Position - primaryPart.Position).Magnitude
@@ -263,11 +263,8 @@ function GeneratorService:FreezeGenerators(duration: number)
     end)
 end
 
-local RoundService
-
 function GeneratorService:KnitStart()
-    
-    Players.PlayerRemoving:Connect(function(player)
+    playerRemovedConnection = Players.PlayerRemoving:Connect(function(player)
         playerRoles[player] = nil
         playerSuspicionCount[player.UserId] = nil
         playerSlowClickCount[player.UserId] = nil
@@ -287,7 +284,7 @@ function GeneratorService:KnitStart()
 end
 
 function GeneratorService:KnitInit()
-    RoundService = Knit.GetService("RoundService")
+    local RoundService = Knit.GetService("RoundService")
     QuestService = Knit.GetService("QuestService")
 end
 

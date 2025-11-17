@@ -52,13 +52,17 @@ function DataController.reconcileTables(target, template)
 	return target
 end
 
-function DataController.onReplicated(checkIndex: string | { string })
+function DataController.onReplicated(checkIndex: (string | { string })?)
 	return {
 		Connect = function(_, callback: () -> any)
 			return DataController._onReplicate:Connect(function(index: string?)
-				local valid = if type(checkIndex) == "table" then table.find(checkIndex, index) else index == checkIndex
-				if valid then
+				if not checkIndex then
 					callback()
+				else
+					local valid = if type(checkIndex) == "table" then table.find(checkIndex, index) else index == checkIndex
+					if valid then
+						callback()
+					end
 				end
 			end)
 		end,
