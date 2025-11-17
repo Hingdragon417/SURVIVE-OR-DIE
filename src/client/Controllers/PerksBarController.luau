@@ -117,7 +117,7 @@ function UtilBarController:UpdateUI()
 			or playerData.SurvivorPerks and playerData.SurvivorPerks[slotName]
 		
 		if not slot then continue end
-		
+
 		if not PerksTemplate then
 			warn("[PerksBarController] PerksTemplate not found!")
 			return
@@ -130,7 +130,6 @@ function UtilBarController:UpdateUI()
 		end
 		
 		newTemplate.Name = "PerksSlot" .. slotName
-		newTemplate.Visible = true
 
 		local keybindLabel = newTemplate:FindFirstChild("Keybind")
 		if keybindLabel and keybindLabel:IsA("TextLabel") then
@@ -161,7 +160,14 @@ function UtilBarController:UpdateUI()
 					quantityLabel.Visible = true
 				end
 				
+				newTemplate.Visible = true
 				newTemplate.Parent = bottomContainer
+				
+				if newTemplate:IsA("TextButton") or newTemplate:IsA("ImageButton") then
+					newTemplate.Activated:Connect(function()
+						self:UseAbility(slotName)
+					end)
+				end
 			else
 				warn("[PerksBarController] Item data not found for:", slot.Name)
 				newTemplate:Destroy()

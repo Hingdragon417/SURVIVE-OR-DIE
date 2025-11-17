@@ -24,8 +24,8 @@ function ShopService:GenerateShopItems()
 		table.insert(availablePerks, { name = perkName, data = perkData })
 	end
 
+	-- First, try to select items based on chance
 	local maxAttempts, attempts = 100, 0
-
 	while #shopItems < maxItems and attempts < maxAttempts do
 		attempts += 1
 		for _, perk in pairs(availablePerks) do
@@ -45,8 +45,8 @@ function ShopService:GenerateShopItems()
 		end
 	end
 
+	-- Ensure we always have exactly 3 items by filling remaining slots
 	if #shopItems < maxItems then
-		local remainingSlots = maxItems - #shopItems
 		local unselectedPerks = {}
 		for _, perk in pairs(availablePerks) do
 			local alreadySelected = false
@@ -60,6 +60,15 @@ function ShopService:GenerateShopItems()
 				table.insert(unselectedPerks, perk)
 			end
 		end
+		
+		-- Shuffle unselected perks for randomness
+		for i = #unselectedPerks, 2, -1 do
+			local j = math.random(i)
+			unselectedPerks[i], unselectedPerks[j] = unselectedPerks[j], unselectedPerks[i]
+		end
+		
+		-- Fill remaining slots until we have exactly 3 items
+		local remainingSlots = maxItems - #shopItems
 		for i = 1, math.min(remainingSlots, #unselectedPerks) do
 			table.insert(shopItems, unselectedPerks[i])
 		end

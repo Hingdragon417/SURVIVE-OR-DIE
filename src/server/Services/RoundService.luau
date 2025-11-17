@@ -46,7 +46,9 @@ function RoundService:GetRandomMaps()
         repeat
             index = math.random(#maps)
             attempts += 1
-            if attempts > 100 then return selected end
+            if attempts > 100 then 
+                return selected 
+            end
         until not used[index]
         
         used[index] = true
@@ -65,7 +67,12 @@ function RoundService:UpdateMapBoards(maps)
     local boards = mapVote:FindFirstChild("MapBoards")
     if not boards then return end
     
-    for i, board in ipairs(boards:GetChildren()) do
+    local boardList = boards:GetChildren()
+    table.sort(boardList, function(a, b)
+        return a.Name < b.Name
+    end)
+    
+    for i, board in ipairs(boardList) do
         local map = maps[i]
         if not map then continue end
         
@@ -90,8 +97,12 @@ end
 function RoundService:SetStatus(newStatus)
     task.spawn(function()
         if newStatus == "Intermission" then
+            self.Votes = {0, 0, 0}
+            table.clear(self.PlayerVotes)
+            
             self.SelectedMaps = self:GetRandomMaps()
             self:UpdateMapBoards(self.SelectedMaps)
+            self:UpdateVoteDisplays()
             
             for i = 20, 1, -1 do
                 self.Status = string.format("Intermission (%d)", i)
@@ -163,18 +174,28 @@ function RoundService:UpdateVoteDisplays()
     local votePads = mapVote:FindFirstChild("MapVotePads")
     if not votePads then return end
     
-    for i, pad in ipairs(votePads:GetChildren()) do
+    local pads = votePads:GetChildren()
+    table.sort(pads, function(a, b)
+        return a.Name < b.Name
+    end)
+    
+    for i, pad in ipairs(pads) do
         local display = pad:FindFirstChild("Display")
         if display then
             local voteDisplay = display:FindFirstChild("VotedAmount")
             if voteDisplay and voteDisplay:IsA("TextLabel") then
-                voteDisplay.Text = tostring(self.Votes[i] or 0)
+                local voteCount = self.Votes[i] or 0
+                voteDisplay.Text = tostring(voteCount)
             end
         end
     end
 end
 
 function RoundService:HandleVote(player, padIndex)
+    if not self.SelectedMaps[padIndex] then
+        return
+    end
+    
     if not self.PlayerVotes[player] then
         self.PlayerVotes[player] = padIndex
         self.Votes[padIndex] += 1
@@ -205,10 +226,32 @@ function RoundService:SetupVotePads()
     end
     table.clear(self._connections)
     
-    for i, pad in ipairs(votePads:GetChildren()) do
+    local voteDebounce = {}
+    
+    local pads = votePads:GetChildren()
+    table.sort(pads, function(a, b)
+        return a.Name < b.Name
+    end)
+    
+    for i, pad in ipairs(pads) do
+        if pad:IsA("BasePart") then
+            pad.CanCollide = false
+        end
+        
         local connection = pad.Touched:Connect(function(hit)
-            local player = game.Players:GetPlayerFromCharacter(hit.Parent)
+            local character = hit.Parent
+            if not character then return end
+            
+            local humanoid = character:FindFirstChild("Humanoid")
+            if not humanoid then return end
+            
+            local player = Players:GetPlayerFromCharacter(character)
             if player then
+                if voteDebounce[player] and tick() - voteDebounce[player] < 0.5 then
+                    return
+                end
+                voteDebounce[player] = tick()
+                
                 self:HandleVote(player, i)
             end
         end)
@@ -222,11 +265,16 @@ function RoundService:GetWinningMap()
     local highestVotes = 0
     local winningIndex = 1
     
-    for i, votes in ipairs(self.Votes) do
+    for i = 1, #self.SelectedMaps do
+        local votes = self.Votes[i] or 0
         if votes > highestVotes then
             highestVotes = votes
             winningIndex = i
         end
+    end
+    
+    if highestVotes == 0 and #self.SelectedMaps > 0 then
+        winningIndex = math.random(#self.SelectedMaps)
     end
     
     return self.SelectedMaps[winningIndex]
@@ -236,7 +284,22 @@ function RoundService:LoadMap(mapName)
     local map = ReplicatedStorage.Maps:FindFirstChild(mapName)
     if not map then return end
     
+    local mapOrigin = Workspace:FindFirstChild("MapOrigin")
     local mapClone = map:Clone()
+    
+    if mapOrigin and mapClone:IsA("Model") and mapClone.PrimaryPart then
+        local mapPrimaryPartPos = mapClone.PrimaryPart.Position
+        local targetPosition = Vector3.new(
+            mapOrigin.Position.X,
+            mapPrimaryPartPos.Y,
+            mapOrigin.Position.Z
+        )
+        local offset = targetPosition - mapPrimaryPartPos
+        mapClone:PivotTo(mapClone:GetPivot() + offset)
+    elseif mapOrigin and mapClone:IsA("Model") then
+        mapClone:PivotTo(mapOrigin.CFrame)
+    end
+    
     mapClone.Parent = Workspace
     self.CurrentMap = mapName
 end
@@ -284,10 +347,9 @@ function RoundService:RemovePlayerFromRound(player: Player)
         end
     end
     
-    -- Check if round should end (only if round is active and not already ending)
     if self._roundActive and not self._roundEnding then
         task.spawn(function()
-            task.wait(0.1) -- Small delay to batch multiple deaths
+            task.wait(0.1)
             if self._roundActive and not self._roundEnding then
                 self:CheckRoundEnd()
             end
@@ -306,16 +368,13 @@ function RoundService:TeleportToLobby(player: Player)
 end
 
 function RoundService:SetupPlayerTracking()
-    -- Disconnect old connection if exists
     if self._playerRemovedConnection then
         self._playerRemovedConnection:Disconnect()
     end
     
-    -- Track player leaving
     self._playerRemovedConnection = Players.PlayerRemoving:Connect(function(player)
         if not self._roundActive or self._roundEnding then return end
         
-        -- Check if it's the killer leaving
         if player == self.Killer then
             self:EndRound("Killer Left", "KillerLeft")
         else
@@ -323,7 +382,6 @@ function RoundService:SetupPlayerTracking()
         end
     end)
     
-    -- Track player deaths
     for _, player in Players:GetPlayers() do
         if player.Character then
             local humanoid = player.Character:FindFirstChild("Humanoid")
@@ -343,7 +401,6 @@ function RoundService:SetupPlayerTracking()
 end
 
 function RoundService:SetupGateEscape()
-    -- Clean up old connections
     for _, connection in self._gateConnections do
         connection:Disconnect()
     end
@@ -366,37 +423,27 @@ function RoundService:SetupGateEscape()
         local player = Players:GetPlayerFromCharacter(hit.Parent)
         if not player then return end
         
-        -- Debounce check
         if escapeDebounce[player] then return end
         
-        -- Check if round is active
         if not self._roundActive or self._roundEnding then return end
         
-        -- Check if player is a survivor and all gens are done
         if player ~= self.Killer and self.CompletedGeneratorCount >= 5 then
-            -- Check if not already escaped and still in round
             if not table.find(self.EscapedPlayers, player) and table.find(self.PlayersInRound, player) then
                 escapeDebounce[player] = true
                 table.insert(self.EscapedPlayers, player)
                 
-                -- Give 100 cash
                 if self._dataService then
-                    local success, err = pcall(function()
+                    pcall(function()
                         local session = self._dataService.getSession(player)
                         if session and session.Data then
                             session.Data.Cash = session.Data.Cash + 100
                             self._dataService:Replicate(player, "Cash")
                         end
                     end)
-                    if not success then
-                        warn("[RoundService] Failed to add cash:", err)
-                    end
                 end
                 
-                -- Remove from round
                 self:RemovePlayerFromRound(player)
                 
-                -- Teleport to lobby
                 task.wait(0.5)
                 self:TeleportToLobby(player)
             end
@@ -409,7 +456,6 @@ end
 function RoundService:CheckRoundEnd()
     if not self._roundActive or self._roundEnding then return end
     
-    -- Count survivors still in round (not including killer)
     local survivorsLeft = 0
     for _, player in self.PlayersInRound do
         if player ~= self.Killer then
@@ -417,9 +463,7 @@ function RoundService:CheckRoundEnd()
         end
     end
     
-    -- If no survivors left in round
     if survivorsLeft == 0 then
-        -- Check if any survivors escaped
         if #self.EscapedPlayers > 0 then
             self:EndRound("Survivors Escaped!", "SurvivorWin")
         else
@@ -444,19 +488,16 @@ function RoundService:EndRound(message: string, reason: string)
 end
 
 function RoundService:CleanupRound()
-    -- Disconnect gate connections
     for _, connection in self._gateConnections do
         connection:Disconnect()
     end
     table.clear(self._gateConnections)
     
-    -- Disconnect player tracking
     if self._playerRemovedConnection then
         self._playerRemovedConnection:Disconnect()
         self._playerRemovedConnection = nil
     end
     
-    -- Teleport all players back to lobby
     for _, player in Players:GetPlayers() do
         self:TeleportToLobby(player)
     end
