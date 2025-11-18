@@ -17,6 +17,7 @@ local QuestService = Knit.CreateService({
 
 local RESET_INTERVAL = 1800 -- 30 minutes in seconds
 local DataService
+local completedQuests = {}
 
 local function getQuestsByType(questType)
     local quests = {}
@@ -56,13 +57,25 @@ function QuestService:GenerateQuestsForPlayer(player: Player)
     
     local allQuestNames = {}
     for questName, _ in pairs(QuestEnums) do
-        table.insert(allQuestNames, questName)
+        if not table.find(questNames, questName) then
+            table.insert(allQuestNames, questName)
+        end
     end
     
     if #allQuestNames > 0 then
         local randomQuestName = allQuestNames[math.random(#allQuestNames)]
         table.insert(questNames, randomQuestName)
     end
+    
+    local uniqueQuestNames = {}
+    local seen = {}
+    for _, questName in ipairs(questNames) do
+        if not seen[questName] then
+            seen[questName] = true
+            table.insert(uniqueQuestNames, questName)
+        end
+    end
+    questNames = uniqueQuestNames
     
     session.Data.ActiveQuests = questNames
     session.Data.LastQuestResetTime = os.time()
@@ -136,11 +149,17 @@ function QuestService:UpdateProgress(player: Player, questName: string, amount: 
     self.Client.ProgressUpdated:Fire(player, questName, progress)
     
     local questData = QuestEnums[questName]
-    if questData and progress >= questData.Goal then
+    local completionKey = player.UserId .. "_" .. questName
+    if questData and progress >= questData.Goal and not completedQuests[completionKey] then
+        completedQuests[completionKey] = true
         self:CompleteQuest(player, questName)
     end
     
     return progress
+end
+
+function QuestService:ResetCompletionTracking()
+    table.clear(completedQuests)
 end
 
 function QuestService:CompleteQuest(player: Player, questName: string)
@@ -154,10 +173,6 @@ function QuestService:CompleteQuest(player: Player, questName: string)
         end
         session.Data.Cash = session.Data.Cash + questData.Reward
         DataService:Replicate(player, "Cash")
-        
-        if session.Data.QuestProgress then
-            session.Data.QuestProgress[questName] = 0
-        end
     end
 end
 

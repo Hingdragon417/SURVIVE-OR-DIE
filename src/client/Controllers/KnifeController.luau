@@ -124,46 +124,58 @@ function KnifeController:KnitStart()
 end
 
 function KnifeController:SetupKnifeTool(character)
-    local knife = character:WaitForChild("Knife", 10)
-    if not knife or not knife:IsA("Tool") then return end
-    
-    local handle = knife:FindFirstChild("Handle")
-    if handle then
-        if not handle:FindFirstChild("Trail") then
-            local attachment0 = Instance.new("Attachment")
-            attachment0.Name = "Attachment0"
-            attachment0.Parent = handle
-            
-            local attachment1 = Instance.new("Attachment")
-            attachment1.Name = "Attachment1"
-            attachment1.Position = Vector3.new(0, 2, 0)
-            attachment1.Parent = handle
-            
-            local trail = Instance.new("Trail")
-            trail.Name = "Trail"
-            trail.Attachment0 = attachment0
-            trail.Attachment1 = attachment1
-            trail.Color = ColorSequence.new(Color3.new(1, 1, 1))
-            trail.Transparency = NumberSequence.new(0.5)
-            trail.Lifetime = 0.3
-            trail.Enabled = false
-            trail.Parent = handle
-            
-            self._trail = trail
-        else
-            self._trail = handle:FindFirstChild("Trail")
+    local function setupKnife(knife)
+        if not knife or not knife:IsA("Tool") then return end
+        
+        local handle = knife:FindFirstChild("Handle")
+        if handle then
+            if not handle:FindFirstChild("Trail") then
+                local attachment0 = Instance.new("Attachment")
+                attachment0.Name = "Attachment0"
+                attachment0.Parent = handle
+                
+                local attachment1 = Instance.new("Attachment")
+                attachment1.Name = "Attachment1"
+                attachment1.Position = Vector3.new(0, 2, 0)
+                attachment1.Parent = handle
+                
+                local trail = Instance.new("Trail")
+                trail.Name = "Trail"
+                trail.Attachment0 = attachment0
+                trail.Attachment1 = attachment1
+                trail.Color = ColorSequence.new(Color3.new(1, 1, 1))
+                trail.Transparency = NumberSequence.new(0.5)
+                trail.Lifetime = 0.3
+                trail.Enabled = false
+                trail.Parent = handle
+                
+                self._trail = trail
+            else
+                self._trail = handle:FindFirstChild("Trail")
+            end
         end
+        
+        knife.Equipped:Connect(function()
+            if self._idleAnimationTrack then
+                self._idleAnimationTrack:Play()
+            end
+        end)
+        
+        knife.Unequipped:Connect(function()
+            if self._idleAnimationTrack then
+                self._idleAnimationTrack:Stop()
+            end
+        end)
     end
     
-    knife.Equipped:Connect(function()
-        if self._idleAnimationTrack then
-            self._idleAnimationTrack:Play()
-        end
-    end)
+    local knife = character:FindFirstChild("Knife")
+    if knife then
+        setupKnife(knife)
+    end
     
-    knife.Unequipped:Connect(function()
-        if self._idleAnimationTrack then
-            self._idleAnimationTrack:Stop()
+    character.ChildAdded:Connect(function(child)
+        if child.Name == "Knife" and child:IsA("Tool") then
+            setupKnife(child)
         end
     end)
 end

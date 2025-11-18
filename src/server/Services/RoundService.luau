@@ -511,6 +511,11 @@ function RoundService:EndRound(message: string, reason: string)
 end
 
 function RoundService:CleanupRound()
+    local QuestService = Knit.GetService("QuestService")
+    if QuestService then
+        QuestService:ResetCompletionTracking()
+    end
+    
     for _, connection in self._gateConnections do
         connection:Disconnect()
     end
