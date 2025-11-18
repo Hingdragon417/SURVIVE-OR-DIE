@@ -149,6 +149,9 @@ function QuestService:CompleteQuest(player: Player, questName: string)
     
     local session = DataService.getSession(player)
     if session and session.Data then
+        if not session.Data.Cash then
+            session.Data.Cash = 0
+        end
         session.Data.Cash = session.Data.Cash + questData.Reward
         DataService:Replicate(player, "Cash")
         

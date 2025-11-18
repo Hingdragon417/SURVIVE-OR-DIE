@@ -1,7 +1,7 @@
 return {
 	["Show Players"] = {
 		Image = 16071029634,
-		Stock = 3,
+		Stock = 5,
 		Price = 150,
 		Chance = 70,
         Cooldown = 15,
@@ -11,18 +11,17 @@ return {
     },
 	["Bloodlust"] = {
 		Image = 16071029634,
-		Stock = 2,
+		Stock = 4,
 		Price = 175,
 		Chance = 55,
 		Cooldown = 20,
 		Name = "Bloodlust",
-		Description = "Massive speed boost for a short time.",
+		Description = "Highlight the closest survivor and deal double damage to them.",
 		Duration = 8,
-		SpeedMultiplier = 1.8,
 	},
 	["Freeze Generators"] = {
 		Image = 16071029634,
-		Stock = 1,
+		Stock = 2,
 		Price = 200,
 		Chance = 40,
 		Cooldown = 20,
@@ -32,7 +31,7 @@ return {
 	},
 	["Blackout"] = {
 		Image = 16071029634,
-		Stock = 2,
+		Stock = 5,
 		Price = 125,
 		Chance = 60,
 		Cooldown = 18,
@@ -42,7 +41,7 @@ return {
 	},
 	["Hunter's Mark"] = {
 		Image = 16071029634,
-		Stock = 4,
+		Stock = 7,
 		Price = 100,
 		Chance = 80,
 		Cooldown = 10,

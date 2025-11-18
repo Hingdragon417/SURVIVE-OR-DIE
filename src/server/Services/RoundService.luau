@@ -336,6 +336,21 @@ function RoundService:SpawnPlayers(map, killer)
         local randomSpawn = spawns[math.random(#spawns)]
         if player.Character then
             player.Character:PivotTo(randomSpawn.CFrame)
+            
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                if player == killer then
+                    humanoid.WalkSpeed = 18
+                    
+                    local knife = ReplicatedStorage:WaitForChild("Assets"):FindFirstChild("Knife")
+                    if knife then
+                        local knifeClone = knife:Clone()
+                        knifeClone.Parent = player.Backpack
+                    end
+                else
+                    humanoid.WalkSpeed = 16
+                end
+            end
         end
     end
     
@@ -351,6 +366,8 @@ function RoundService:RemovePlayerFromRound(player: Player)
             break
         end
     end
+    
+    self.Client.PerksEnabled:Fire(player, false)
     
     if self._roundActive and not self._roundEnding then
         task.spawn(function()
@@ -505,8 +522,16 @@ function RoundService:CleanupRound()
     end
     
     for _, player in Players:GetPlayers() do
+        if table.find(self.PlayersInRound, player) or player == self.Killer then
+            self.Client.PerksEnabled:Fire(player, false)
+        end
+        player:LoadCharacter()
         self:TeleportToLobby(player)
     end
+    
+    table.clear(self.PlayersInRound)
+    table.clear(self.EscapedPlayers)
+    self.Killer = nil
     
     for _, child in Workspace:GetChildren() do
         if ReplicatedStorage.Maps:FindFirstChild(child.Name) then
@@ -522,9 +547,6 @@ function RoundService:CleanupRound()
     self.CompletedGeneratorCount = 0
     self.Client.GeneratorsCompleted:FireAll(0)
     self.CurrentMap = nil
-    table.clear(self.PlayersInRound)
-    table.clear(self.EscapedPlayers)
-    self.Killer = nil
     self._roundActive = false
     self._roundEnding = false
 end

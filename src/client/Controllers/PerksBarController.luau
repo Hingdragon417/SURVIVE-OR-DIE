@@ -61,7 +61,9 @@ function UtilBarController:UseKillerPerks(slotName)
 	if not playerData or not playerData.Perks then return end
 
 	local PerksSlot = playerData.Perks[slotName]
-	if not PerksSlot or PerksSlot.Name == "" or PerksSlot.Quantity <= 0 then return end
+	if not PerksSlot or PerksSlot.Name == "" or not PerksSlot.Quantity or PerksSlot.Quantity <= 0 then 
+		return 
+	end
 
 	local PerksData = KillerPerks[PerksSlot.Name]
 	if not PerksData then return end

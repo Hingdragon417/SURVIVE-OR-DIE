@@ -148,17 +148,48 @@ end
 
 function PerkEffectsService:ActivateBloodlust(player: Player)
     local character = player.Character
-    if not character then return false end
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return false end
     
-    local humanoid = character:FindFirstChild("Humanoid")
-    if not humanoid then return false end
+    local killerPosition = character.HumanoidRootPart.Position
+    local closestPlayer = nil
+    local closestDistance = math.huge
     
-    local originalSpeed = humanoid.WalkSpeed
-    humanoid.WalkSpeed = originalSpeed * KillerPerks["Bloodlust"].SpeedMultiplier
+    for _, otherPlayer in Players:GetPlayers() do
+        if otherPlayer ~= player and table.find(RoundService.PlayersInRound, otherPlayer) then
+            local otherCharacter = otherPlayer.Character
+            if otherCharacter and otherCharacter:FindFirstChild("HumanoidRootPart") then
+                local distance = (otherCharacter.HumanoidRootPart.Position - killerPosition).Magnitude
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestPlayer = otherPlayer
+                end
+            end
+        end
+    end
+    
+    if not closestPlayer then return false end
+    
+    local targetCharacter = closestPlayer.Character
+    if not targetCharacter then return false end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+    highlight.OutlineColor = Color3.fromRGB(150, 0, 0)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.Parent = targetCharacter
+    
+    if not self._bloodlustTargets then
+        self._bloodlustTargets = {}
+    end
+    self._bloodlustTargets[player.UserId] = closestPlayer.UserId
     
     task.delay(KillerPerks["Bloodlust"].Duration, function()
-        if humanoid and humanoid.Parent then
-            humanoid.WalkSpeed = originalSpeed
+        if highlight and highlight.Parent then
+            highlight:Destroy()
+        end
+        if self._bloodlustTargets then
+            self._bloodlustTargets[player.UserId] = nil
         end
     end)
     
@@ -257,6 +288,11 @@ function PerkEffectsService.Client:UsePerk(player: Player, perkName: string, isK
     end
     
     return success
+end
+
+function PerkEffectsService:IsBloodlustTarget(attackerUserId: number, targetUserId: number): boolean
+    if not self._bloodlustTargets then return false end
+    return self._bloodlustTargets[attackerUserId] == targetUserId
 end
 
 function PerkEffectsService:KnitStart()

@@ -10,10 +10,12 @@ local KnifeService = Knit.CreateService({
     Client = {
         KnifeAttack = "KnifeAttack",
     },
-    _attackDebounce = {}
+    _attackDebounce = {},
+    _originalSpeeds = {}
 })
 
 local QuestService
+local PerkEffectsService
 
 function KnifeService.Client:KnifeAttack(player: Player)
     if KnifeService._attackDebounce[player.UserId] then
@@ -30,22 +32,35 @@ function KnifeService.Client:KnifeAttack(player: Player)
     
     local humanoid = character:FindFirstChild("Humanoid")
     local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-    
-    local originalWalkSpeed = humanoid and humanoid.WalkSpeed or 16
-    if humanoid then
-        humanoid.WalkSpeed = 5
+    if not rootPart or not humanoid then 
+        KnifeService._attackDebounce[player.UserId] = nil
+        return 
     end
     
+    local currentSpeed = humanoid.WalkSpeed
+    if currentSpeed ~= 5 then
+        KnifeService._originalSpeeds[player.UserId] = currentSpeed
+    end
+    
+    local originalSpeed = KnifeService._originalSpeeds[player.UserId] or 16
+    humanoid.WalkSpeed = 5
+    
     task.delay(1, function()
-        if humanoid and humanoid.Parent then
-            humanoid.WalkSpeed = originalWalkSpeed
+        local char = player.Character
+        if char then
+            local hum = char:FindFirstChild("Humanoid")
+            if hum then
+                hum.WalkSpeed = originalSpeed
+            end
         end
+        
+        task.wait(1)
+        KnifeService._attackDebounce[player.UserId] = nil
     end)
     
     local hitbox = Instance.new("Part")
     hitbox.Name = "KnifeHitbox"
-    hitbox.Size = Vector3.new(5, 5, 5)
+    hitbox.Size = Vector3.new(2.5, 2.5, 2.5)
     hitbox.CFrame = rootPart.CFrame * CFrame.new(0, 0, -5.5)
     hitbox.Anchored = false
     hitbox.CanCollide = false
@@ -92,7 +107,17 @@ function KnifeService.Client:KnifeAttack(player: Player)
                 
                 local humanoid = hit.Parent:FindFirstChild("Humanoid")
                 if humanoid then
-                    humanoid:TakeDamage(40)
+                    local damage = 45
+                    
+                    if not PerkEffectsService then
+                        PerkEffectsService = Knit.GetService("PerkEffectsService")
+                    end
+                    
+                    if PerkEffectsService and PerkEffectsService:IsBloodlustTarget(player.UserId, hitPlayer.UserId) then
+                        damage = damage * 2
+                    end
+                    
+                    humanoid:TakeDamage(damage)
                     
                     if humanoid.Health <= 0 then
                         if not QuestService then
@@ -116,6 +141,10 @@ function KnifeService.Client:KnifeAttack(player: Player)
 end
 
 function KnifeService:KnitStart()
+    Players.PlayerRemoving:Connect(function(player)
+        KnifeService._attackDebounce[player.UserId] = nil
+        KnifeService._originalSpeeds[player.UserId] = nil
+    end)
 end
 
 function KnifeService:KnitInit()

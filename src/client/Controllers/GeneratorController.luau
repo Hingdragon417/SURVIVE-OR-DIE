@@ -274,7 +274,7 @@ local function disconnectListeners()
 end
 
 function GeneratorController:StartGenerator(generatorObject: Instance)
-    local generatorId = generatorObject:GetFullName()
+    local generatorId = generatorObject.Name
     
     if completedGenerators[generatorId] then
         warn("[GeneratorController] Generator", generatorId, "is already completed, blocking access")
@@ -316,6 +316,11 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
     
     currentGenerator = generatorId
     currentGeneratorObject = generatorObject
+    
+    local proximityPrompt = generatorObject:FindFirstChildWhichIsA("ProximityPrompt")
+    if proximityPrompt then
+        proximityPrompt.Enabled = false
+    end
     
     local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
     if not generatorFrame then return end
@@ -428,6 +433,13 @@ function GeneratorController:CloseGenerator()
     local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
     if generatorFrame then
         generatorFrame.Visible = false
+    end
+    
+    if currentGeneratorObject then
+        local proximityPrompt = currentGeneratorObject:FindFirstChildWhichIsA("ProximityPrompt")
+        if proximityPrompt then
+            proximityPrompt.Enabled = true
+        end
     end
     
     clearButtons()

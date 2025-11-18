@@ -198,8 +198,7 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
         end
         
         if RoundService then
-            local generatorName = generatorId:match("%.([^%.]+)%.Part$") or generatorId
-            RoundService:MarkGeneratorCompleted(generatorName)
+            RoundService:MarkGeneratorCompleted(generatorId)
         end
         
         if not QuestService then
