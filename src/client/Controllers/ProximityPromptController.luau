@@ -28,8 +28,8 @@ local function stylePrompt(prompt: ProximityPrompt, promptType: string)
     prompt.RequiresLineOfSight = false
     
     if promptType == "Generator" then
-        prompt.ActionText = "Use GenTemplate"
-        prompt.ObjectText = "GenTemplate"
+        prompt.ActionText = "Use Generator"
+        prompt.ObjectText = "Generator"
     end
 end
 
@@ -37,48 +37,12 @@ local function onPromptTriggered(prompt: ProximityPrompt, player: Player, prompt
     if player ~= Players.LocalPlayer then return end
     
     if promptType == "Generator" then
-        local success, RoundController = pcall(function()
-            return Knit.GetController("RoundController")
-        end)
-        
-        if not success or not RoundController then
-            warn("RoundController not found")
-            return
-        end
-        
-        if not RoundController.playerRole then
-            warn("Player role not assigned yet, please wait for round to start")
-            return
-        end
-        
-        if RoundController.playerRole ~= "Survivor" then
-            warn("Only Survivors can use generators!")
-            return
-        end
-        
-        local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
-        
-        if generatorFrame and generatorFrame:IsA("Frame") then
-            generatorFrame.Visible = true
-            
-            local uiScale = generatorFrame:FindFirstChildWhichIsA("UIScale")
-            if not uiScale then
-                uiScale = Instance.new("UIScale")
-                uiScale.Parent = generatorFrame
-            end
-            
-            uiScale.Scale = 0
-            
-            local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            local tween = TweenService:Create(uiScale, tweenInfo, {Scale = 1})
-            tween:Play()
-            
-            local GeneratorController = Knit.GetController("GeneratorController")
-            if GeneratorController then
-                GeneratorController:StartGenerator(object)
-            end
+        -- Let GeneratorController handle frame visibility after server validation
+        local GeneratorController = Knit.GetController("GeneratorController")
+        if GeneratorController then
+            GeneratorController:StartGenerator(object)
         else
-            warn("GeneratorFrame not found in Main ScreenGui")
+            warn("GeneratorController not found")
         end
     end
 end

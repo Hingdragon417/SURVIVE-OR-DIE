@@ -315,7 +315,10 @@ function GeneratorController:_StartGeneratorInternal(generatorObject: Instance, 
     end
     
     local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
-    if not generatorFrame then return end
+    if not generatorFrame then 
+        warn("[GeneratorController] GeneratorFrame not found")
+        return 
+    end
     
     local content = generatorFrame:FindFirstChild("Content")
     if not content then return end
@@ -326,7 +329,20 @@ function GeneratorController:_StartGeneratorInternal(generatorObject: Instance, 
     clearButtons()
     disconnectListeners()
     
+    -- Show frame with animation after validation
     generatorFrame.Visible = true
+    
+    local uiScale = generatorFrame:FindFirstChildWhichIsA("UIScale")
+    if not uiScale then
+        uiScale = Instance.new("UIScale")
+        uiScale.Parent = generatorFrame
+    end
+    
+    uiScale.Scale = 0
+    
+    local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(uiScale, tweenInfo, {Scale = 1})
+    tween:Play()
     
     RunService.RenderStepped:Wait()
     
