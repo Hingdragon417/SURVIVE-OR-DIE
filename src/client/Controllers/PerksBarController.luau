@@ -287,6 +287,11 @@ function UtilBarController:KnitStart()
 
 	table.insert(self._connections, RoleShowController:OnRoleChanged(function()
 		self:UpdateUI()
+		-- Update equipped count display when role changes
+		local ShopController = Knit.GetController("ShopController")
+		if ShopController and ShopController.UpdateEquippedCountDisplay then
+			ShopController:UpdateEquippedCountDisplay()
+		end
 	end))
 
 	task.wait(1)

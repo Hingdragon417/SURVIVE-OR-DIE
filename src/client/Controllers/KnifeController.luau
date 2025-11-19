@@ -73,6 +73,11 @@ function KnifeController:PlayKnifeAnimation()
         self:LoadAnimation()
     end
     
+    if not self._animationTrack1 or not self._animationTrack2 then
+        warn("[KnifeController] Failed to load animations")
+        return
+    end
+    
     self._isAnimating = true
     
     if self._trail then
@@ -81,19 +86,27 @@ function KnifeController:PlayKnifeAnimation()
     
     local trackToPlay = self._useFirstAnimation and self._animationTrack1 or self._animationTrack2
     
-    if trackToPlay then
+    if trackToPlay and trackToPlay.Length then
         trackToPlay:Play()
         
-        trackToPlay.Stopped:Wait()
+        task.spawn(function()
+            trackToPlay.Stopped:Wait()
+            
+            if self._trail then
+                self._trail.Enabled = false
+            end
+            
+            self._useFirstAnimation = not self._useFirstAnimation
+        end)
         
-        if self._trail then
-            self._trail.Enabled = false
-        end
-        
-        self._useFirstAnimation = not self._useFirstAnimation
-        self._isAnimating = false
+        -- Keep _isAnimating true for 2 seconds to match server walkspeed restoration
+        task.delay(2, function()
+            self._isAnimating = false
+        end)
     else
+        warn("[KnifeController] Animation track invalid")
         self._isAnimating = false
+        self:LoadAnimation()
     end
 end
 
@@ -113,11 +126,9 @@ function KnifeController:KnitStart()
         if gameProcessed then return end
         
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            if self:IsKnifeEquipped() then
-                
-                KnifeService:KnifeAttack()
-                
+            if self:IsKnifeEquipped() and not self._isAnimating then
                 self:PlayKnifeAnimation()
+                KnifeService:KnifeAttack()
             end
         end
     end)

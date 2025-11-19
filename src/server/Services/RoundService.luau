@@ -516,6 +516,12 @@ function RoundService:CleanupRound()
         QuestService:ResetCompletionTracking()
     end
     
+    -- Reset generators for new round
+    local GeneratorService = Knit.GetService("GeneratorService")
+    if GeneratorService then
+        GeneratorService:ResetGenerators()
+    end
+    
     for _, connection in self._gateConnections do
         connection:Disconnect()
     end

@@ -17,6 +17,38 @@ local SurvivorPerksService = Knit.CreateService({
     _purchaseLocks = {},
 })
 
+function SurvivorPerksService:GetEquippedSurvivorPerksCount(playerData)
+    if not playerData or not playerData.SurvivorPerks then
+        return 0
+    end
+    
+    local count = 0
+    for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
+        local slot = playerData.SurvivorPerks[slotName]
+        if slot and slot.Name ~= "" then
+            count = count + 1
+        end
+    end
+    
+    return count
+end
+
+function SurvivorPerksService:GetUniqueSurvivorPerks(playerData)
+    if not playerData or not playerData.SurvivorPerks then
+        return {}
+    end
+    
+    local uniquePerks = {}
+    for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
+        local slot = playerData.SurvivorPerks[slotName]
+        if slot and slot.Name ~= "" then
+            uniquePerks[slot.Name] = true
+        end
+    end
+    
+    return uniquePerks
+end
+
 function SurvivorPerksService.Client:PurchaseSurvivorPerk(player: Player, perkName: string)
     local lockKey = player.UserId .. "_" .. perkName
     if SurvivorPerksService._purchaseLocks[lockKey] then
@@ -65,8 +97,15 @@ function SurvivorPerksService.Client:PurchaseSurvivorPerk(player: Player, perkNa
     end
     
     if not availableSlot then
-        SurvivorPerksService._purchaseLocks[lockKey] = false
-        return false, "No available slots"
+        -- Check if player has reached the limit of 3 slots
+        local equippedCount = self.Server:GetEquippedSurvivorPerksCount(data)
+        if equippedCount >= 3 then
+            SurvivorPerksService._purchaseLocks[lockKey] = false
+            return false, "Maximum abilities reached (3/3)"
+        else
+            SurvivorPerksService._purchaseLocks[lockKey] = false
+            return false, "No available slots"
+        end
     end
 
     data.Coins -= abilityData.Price

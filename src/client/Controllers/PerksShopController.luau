@@ -32,8 +32,58 @@ local killerButton = tabsFrame:WaitForChild("Killer")
 local survivorButton = tabsFrame:WaitForChild("Survivor")
 local scrollingFrame = contentFrame:WaitForChild("Container")
 local timerLabel = shopFrame:WaitForChild("Timer")
+-- Try to find an existing Text label for equipped count, if not found it will be nil
+local equippedCountLabel = shopFrame:FindFirstChild("Text")
 
 local PerksTemplate = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("UIAssets"):WaitForChild("PerksTemplate")
+
+function ShopController:GetEquippedKillerPerksCount(playerData)
+	if not playerData or not playerData.Perks then
+		return 0
+	end
+	
+	local count = 0
+	for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
+		local slot = playerData.Perks[slotName]
+		if slot and slot.Name ~= "" then
+			count = count + 1
+		end
+	end
+	
+	return count
+end
+
+function ShopController:GetEquippedSurvivorPerksCount(playerData)
+	if not playerData or not playerData.SurvivorPerks then
+		return 0
+	end
+	
+	local count = 0
+	for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
+		local slot = playerData.SurvivorPerks[slotName]
+		if slot and slot.Name ~= "" then
+			count = count + 1
+		end
+	end
+	
+	return count
+end
+
+function ShopController:UpdateEquippedCountDisplay()
+	if not equippedCountLabel then return end
+	
+	local playerData = DataController.getData()
+	if not playerData then return end
+	
+	local count = 0
+	if currentTab == "Killer" then
+		count = self:GetEquippedKillerPerksCount(playerData)
+	else
+		count = self:GetEquippedSurvivorPerksCount(playerData)
+	end
+	
+	equippedCountLabel.Text = string.format("Perks (%d/3)", count)
+end
 
 function ShopController:FormatTime(seconds)
 	local hours = math.floor(seconds / 3600)
@@ -88,6 +138,8 @@ function ShopController:SwitchTab(tabName)
 	else
 		self:UpdateSurvivorPerksUI()
 	end
+	
+	self:UpdateEquippedCountDisplay()
 end
 
 function ShopController:UpdateShopUI()
@@ -196,6 +248,7 @@ function ShopController:UpdateShopUI()
 	end
 
 	self:UpdateTimerDisplay()
+	self:UpdateEquippedCountDisplay()
 	isUpdating = false
 end
 
@@ -274,6 +327,7 @@ function ShopController:UpdateSurvivorPerksUI()
 		end
 	end
 
+	self:UpdateEquippedCountDisplay()
 	isUpdating = false
 end
 
@@ -359,6 +413,7 @@ function ShopController:KnitStart()
 		if currentTab == "Killer" then
 			self:UpdateShopUI()
 		end
+		self:UpdateEquippedCountDisplay()
 	end))
 
 	table.insert(self._connections, DataController.onReplicated("Coins"):Connect(function()
@@ -371,10 +426,18 @@ function ShopController:KnitStart()
 		self:UpdateTimerDisplay()
 	end))
 	
+	table.insert(self._connections, DataController.onReplicated("Perks"):Connect(function()
+		if currentTab == "Killer" then
+			self:UpdateShopUI()
+		end
+		self:UpdateEquippedCountDisplay()
+	end))
+	
 	table.insert(self._connections, DataController.onReplicated("SurvivorPerks"):Connect(function()
 		if currentTab == "Survivor" then
 			self:UpdateSurvivorPerksUI()
 		end
+		self:UpdateEquippedCountDisplay()
 	end))
 
 	task.wait(1.5)

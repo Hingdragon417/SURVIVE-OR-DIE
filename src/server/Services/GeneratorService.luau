@@ -25,6 +25,7 @@ local generatorProgress = {}
 local playerRoles = {}
 local generatorCooldowns = {}
 local playerGeneratorLocks = {}
+local completedGenerators = {}
 local RoundService
 local QuestService
 local DataService
@@ -65,6 +66,34 @@ end
 
 function GeneratorService:IsOnCooldown(generatorId: string): boolean
     return generatorCooldowns[generatorId] ~= nil
+end
+
+function GeneratorService:IsCompleted(generatorId: string): boolean
+    return completedGenerators[generatorId] == true
+end
+
+function GeneratorService:CanAccessGenerator(player: Player, generatorId: string): boolean
+    if self:IsCompleted(generatorId) then
+        warn("[GeneratorService] Generator", generatorId, "is already completed")
+        return false
+    end
+    
+    if self:IsOnCooldown(generatorId) then
+        warn("[GeneratorService] Generator", generatorId, "is on cooldown")
+        return false
+    end
+    
+    if generatorsFrozen and os.time() < generatorsFrozenEnd then
+        warn("[GeneratorService] Generators are frozen")
+        return false
+    end
+    
+    if playerRoles[player] ~= "Survivor" then
+        warn("[GeneratorService] Player", player.Name, "is not a Survivor")
+        return false
+    end
+    
+    return true
 end
 
 function GeneratorService:StartCooldown(generatorId: string, generator: Instance)
@@ -128,6 +157,10 @@ function GeneratorService.Client:IsOnCooldown(player: Player, generatorId: strin
     return self.Server:IsOnCooldown(generatorId)
 end
 
+function GeneratorService.Client:CanAccessGenerator(player: Player, generatorId: string): boolean
+    return self.Server:CanAccessGenerator(player, generatorId)
+end
+
 function GeneratorService.Client:AddProgress(player: Player, generatorId: string, amount: number, reactionTime: number)
     if type(reactionTime) ~= "number" then
         warn("[GeneratorService] Invalid reaction time from", player.Name)
@@ -155,18 +188,12 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
         playerSuspicionCount[player.UserId] = 0
     end
     
-    if self.Server:IsOnCooldown(generatorId) then
-        warn("[GeneratorService] Generator is on cooldown, rejecting interaction")
+    if not self.Server:CanAccessGenerator(player, generatorId) then
         return nil
     end
     
-    if generatorsFrozen and os.time() < generatorsFrozenEnd then
-        warn("[GeneratorService] Generators are frozen, rejecting progress")
-        return nil
-    end
-    
-    if playerRoles[player] ~= "Survivor" then
-        warn("[GeneratorService] Player", player.Name, "is not a Survivor (role:", playerRoles[player], "), rejecting progress")
+    if self.Server:IsCompleted(generatorId) then
+        warn("[GeneratorService] Generator", generatorId, "is already completed, rejecting progress")
         return nil
     end
     
@@ -191,6 +218,12 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
     self.ProgressUpdated:FireAll(generatorId, newProgress)
     
     if newProgress >= 100 then
+        print("[DEBUG] Generator completed:", generatorId)
+        print("[DEBUG] All generator progress:", generatorProgress)
+        
+        -- Mark as completed on server
+        completedGenerators[generatorId] = true
+        
         playerGeneratorLocks[player.UserId] = nil
         
         if not RoundService then
@@ -198,6 +231,7 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
         end
         
         if RoundService then
+            print("[DEBUG] Marking generator as completed in RoundService:", generatorId)
             RoundService:MarkGeneratorCompleted(generatorId)
         end
         
@@ -215,21 +249,45 @@ function GeneratorService.Client:AddProgress(player: Player, generatorId: string
     return newProgress
 end
 
-function GeneratorService.Client:TriggerCooldown(player: Player, generatorId: string, generator: Instance)
-    if self.Server:IsOnCooldown(generatorId) then
-        warn("[GeneratorService] Generator already on cooldown")
+function GeneratorService.Client:ReportMissClick(player: Player, generatorId: string)
+    if playerGeneratorLocks[player.UserId] ~= generatorId then
+        warn("[GeneratorService] Player", player.Name, "reporting miss click for wrong generator")
         return
     end
     
     playerGeneratorLocks[player.UserId] = nil
     
-    self.Server:StartCooldown(generatorId, generator)
+    -- Find the generator object in workspace
+    local workspace = game:GetService("Workspace")
+    local generatorObject = workspace:FindFirstChild(generatorId, true)
+    
+    if generatorObject then
+        self.Server:StartCooldown(generatorId, generatorObject)
+    else
+        warn("[GeneratorService] Could not find generator object for cooldown:", generatorId)
+    end
 end
 
 function GeneratorService.Client:ReportSlowClick(player: Player, generatorId: string, timeLimit: number)
+    if playerGeneratorLocks[player.UserId] ~= generatorId then
+        warn("[GeneratorService] Player", player.Name, "reporting slow click for wrong generator")
+        return
+    end
+    
     playerSlowClickCount[player.UserId] = (playerSlowClickCount[player.UserId] or 0) + 1
     
     warn("[GeneratorService] Player", player.Name, "failed to click within", timeLimit, "seconds")
+    
+    -- Clear the player's generator lock
+    playerGeneratorLocks[player.UserId] = nil
+    
+    -- Trigger cooldown on slow click
+    local workspace = game:GetService("Workspace")
+    local generatorObject = workspace:FindFirstChild(generatorId, true)
+    
+    if generatorObject and not self.Server:IsOnCooldown(generatorId) then
+        self.Server:StartCooldown(generatorId, generatorObject)
+    end
     
     if playerSlowClickCount[player.UserId] >= SLOW_CLICK_ALERT_THRESHOLD then
         if player.Character and player.Character.PrimaryPart then
@@ -251,6 +309,43 @@ function GeneratorService.Client:ReportSlowClick(player: Player, generatorId: st
         
         playerSlowClickCount[player.UserId] = 0
     end
+end
+
+function GeneratorService:ResetGenerators()
+    -- Store generator IDs that had progress before clearing
+    local generatorsToReset = {}
+    for generatorId, _ in pairs(generatorProgress) do
+        table.insert(generatorsToReset, generatorId)
+    end
+    
+    -- Clear all generator progress
+    table.clear(generatorProgress)
+    
+    -- Clear all generator cooldowns
+    table.clear(generatorCooldowns)
+    
+    -- Clear completed generators
+    table.clear(completedGenerators)
+    
+    -- Clear player generator locks
+    table.clear(playerGeneratorLocks)
+    
+    -- Clear player roles
+    table.clear(playerRoles)
+    
+    -- Reset frozen state
+    generatorsFrozen = false
+    generatorsFrozenEnd = 0
+    
+    -- Fire signals to update clients
+    self.Client.GeneratorCooldown:FireAll("all", false)
+    
+    -- Fire progress sync to reset all progress bars on client
+    for _, generatorId in ipairs(generatorsToReset) do
+        self.Client.ProgressSync:FireAll(generatorId, 0)
+    end
+    
+    print("[DEBUG] Generators have been reset for new round")
 end
 
 function GeneratorService:FreezeGenerators(duration: number)

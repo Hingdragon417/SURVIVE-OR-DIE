@@ -26,9 +26,8 @@ local frameClickConnection = nil
 local progressUpdatedConnection = nil
 local generatorCooldownConnection = nil
 local initialPosition = nil
-local generatorCooldowns = {}
-local completedGenerators = {}
 local buttonTimeLimit = 2.5
+local roundTransitioning = false -- Add flag to track round transitions
 
 local function clearButtons()
     for _, button in ipairs(activeButtons) do
@@ -121,14 +120,8 @@ local function spawnButton(clickBox: Frame)
     
     task.delay(timeLimit, function()
         if not buttonClicked and button.Parent then
+            -- Report slow click to server, which will handle cooldown
             GeneratorService:ReportSlowClick(currentGenerator, timeLimit)
-            
-            if currentGenerator and currentGeneratorObject then
-                if not generatorCooldowns[currentGenerator] then
-                    local generatorModel = currentGeneratorObject.Parent
-                    GeneratorService:TriggerCooldown(currentGenerator, generatorModel)
-                end
-            end
             
             local buttonIndex = table.find(activeButtons, button)
             if buttonIndex then
@@ -239,12 +232,10 @@ local function setProgressBarImmediate(progress: number)
     progressFrame.Size = UDim2.new(targetScale, 0, 1, 0)
 end
 
-local function triggerCooldownAndClose()
-    if currentGenerator and currentGeneratorObject then
-        if not generatorCooldowns[currentGenerator] then
-            local generatorModel = currentGeneratorObject.Parent
-            GeneratorService:TriggerCooldown(currentGenerator, generatorModel)
-        end
+local function reportMissClickAndClose()
+    -- Report miss click to server, server will handle cooldown
+    if currentGenerator then
+        GeneratorService:ReportMissClick(currentGenerator)
     end
     
     GeneratorController:CloseGenerator()
@@ -274,25 +265,26 @@ local function disconnectListeners()
 end
 
 function GeneratorController:StartGenerator(generatorObject: Instance)
-    local generatorId = generatorObject.Name
+    local generatorId = generatorObject:GetAttribute("GeneratorId") or generatorObject.Parent and generatorObject.Parent.Name or generatorObject:GetFullName()
     
-    if completedGenerators[generatorId] then
-        warn("[GeneratorController] Generator", generatorId, "is already completed, blocking access")
-        local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
-        if generatorFrame then
-            generatorFrame.Visible = false
+    -- Check with server if generator can be accessed
+    GeneratorService:CanAccessGenerator(generatorId):andThen(function(canAccess)
+        if not canAccess then
+            warn("[GeneratorController] Cannot access generator", generatorId)
+            local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
+            if generatorFrame then
+                generatorFrame.Visible = false
+            end
+            return
         end
-        return
-    end
-    
-    if generatorCooldowns[generatorId] == true then
-        warn("[GeneratorController] Generator", generatorId, "is on cooldown, cannot access")
-        local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
-        if generatorFrame then
-            generatorFrame.Visible = false
-        end
-        return
-    end
+        
+        self:_StartGeneratorInternal(generatorObject, generatorId)
+    end):catch(function(err)
+        warn("[GeneratorController] Failed to check generator access:", err)
+    end)
+end
+
+function GeneratorController:_StartGeneratorInternal(generatorObject: Instance, generatorId: string)
     
     if currentGenerator and currentGenerator ~= generatorId then
         self:CloseGenerator()
@@ -338,7 +330,17 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
     
     RunService.RenderStepped:Wait()
     
+    -- Always reset progress bar to 0 first to clear any stale progress
     setProgressBarImmediate(0)
+    
+    -- Then sync with actual server progress
+    GeneratorService:GetProgress(generatorId):andThen(function(serverProgress)
+        if type(serverProgress) == "number" and generatorId == currentGenerator then
+            setProgressBarImmediate(serverProgress)
+        end
+    end):catch(function(err)
+        warn("[GeneratorController] Failed to get initial progress:", err)
+    end)
     
     spawnButton(clickBox)
     
@@ -355,21 +357,8 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
             
             if type(progressValue) == "number" then
                 updateProgressBar(progressValue)
-                
-                if progressValue >= 100 then
-                    completedGenerators[generatorId] = true
-                    self:CloseGenerator()
-                end
             end
         end
-    end)
-    
-    GeneratorService:GetProgress(generatorId):andThen(function(currentProgress)
-        if type(currentProgress) == "number" and generatorId == currentGenerator then
-            setProgressBarImmediate(currentProgress)
-        end
-    end):catch(function(err)
-        warn("[GeneratorController] Failed to sync progress:", err)
     end)
     
     frameClickConnection = generatorFrame.InputBegan:Connect(function(input)
@@ -388,7 +377,7 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
             if not clickedButton then
                 for _, obj in guiObjects do
                     if obj == clickBox then
-                        triggerCooldownAndClose()
+                        reportMissClickAndClose()
                         break
                     end
                 end
@@ -412,7 +401,7 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
             end
             
             if not clickedInside then
-                triggerCooldownAndClose()
+                reportMissClickAndClose()
             end
         end
     end)
@@ -423,9 +412,28 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
             local distance = (currentPos - initialPosition).Magnitude
             
             if distance > 3 then
-                triggerCooldownAndClose()
+                reportMissClickAndClose()
             end
         end
+    end)
+end
+
+function GeneratorController:ResetForNewRound()
+    print("[DEBUG] ResetForNewRound called")
+    
+    -- Set flag to prevent issues during transition
+    roundTransitioning = true
+    
+    -- Close any active generator interface
+    self:CloseGenerator()
+    
+    print("[DEBUG] ResetForNewRound completed")
+    print("[DEBUG] - roundTransitioning flag set to:", roundTransitioning)
+    
+    -- Clear the flag after a short delay to allow round to properly start
+    task.delay(2, function()
+        roundTransitioning = false
+        print("[DEBUG] Round transition flag cleared, generators can now be marked as completed")
     end)
 end
 
@@ -458,20 +466,39 @@ end
 
 function GeneratorController:KnitStart()
     GeneratorService.GeneratorCooldown:Connect(function(generatorId: string, onCooldown: boolean)
-        if onCooldown then
-            generatorCooldowns[generatorId] = true
-        else
-            generatorCooldowns[generatorId] = nil
+        if generatorId == "all" then
+            -- Server signaling round reset
+            print("[DEBUG] 'all' signal received - server reset generators")
+            
+            -- Set flag to prevent issues during transition
+            roundTransitioning = true
+            
+            print("[DEBUG] 'all' signal processed - roundTransitioning flag set to:", roundTransitioning)
+            
+            -- Clear the flag after a short delay
+            task.delay(2, function()
+                roundTransitioning = false
+                print("[DEBUG] Round transition flag cleared via 'all' signal")
+            end)
+            
+            return
         end
         
+        -- If this generator is on cooldown and it's the current one, close it
         if onCooldown and generatorId == currentGenerator then
             GeneratorController:CloseGenerator()
         end
     end)
     
     GeneratorService.GeneratorCompleted:Connect(function(generatorId: string)
-        completedGenerators[generatorId] = true
+        print("[DEBUG] Generator completed signal received for:", generatorId, "roundTransitioning:", roundTransitioning)
         
+        if roundTransitioning then
+            print("[DEBUG] Ignoring generator completion signal during round transition")
+            return
+        end
+        
+        -- Close the generator UI if it's the current one
         if generatorId == currentGenerator then
             GeneratorController:CloseGenerator()
         end
@@ -483,12 +510,20 @@ function GeneratorController:KnitStart()
         end
     end)
     
+    -- Connect to round status changes to reset generators
+    local RoundService = Knit.GetService("RoundService")
+    RoundService.StatusChanged:Connect(function(status)
+        if status == "Intermission" then
+            self:ResetForNewRound()
+        end
+    end)
+    
     local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
     if generatorFrame then
         local closeButton = generatorFrame:FindFirstChild("X")
         if closeButton and closeButton:IsA("GuiButton") then
             closeButton.Activated:Connect(function()
-                triggerCooldownAndClose()
+                reportMissClickAndClose()
             end)
         end
     end

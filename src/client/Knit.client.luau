@@ -78,6 +78,15 @@ do
             
             cameraConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateAllUIStrokeThickness)
             
+            localPlayer.PlayerGui.DescendantAdded:Connect(function(instance)
+                if instance:IsA("UIStroke") then
+                    local scale = camera.ViewportSize.X / BASE_SIZE
+                    local initial = instance.Thickness
+                    instance:SetAttribute("InitialThickness", initial)
+                    instance.Thickness = initial * scale
+                end
+            end)
+            
             task.spawn(function()
                 local playerData = DataController.waitForData()
                 

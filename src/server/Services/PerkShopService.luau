@@ -73,6 +73,38 @@ function ShopService:GenerateShopItems()
 	return shopItems
 end
 
+function ShopService:GetEquippedKillerPerksCount(playerData)
+	if not playerData or not playerData.Perks then
+		return 0
+	end
+	
+	local count = 0
+	for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
+		local slot = playerData.Perks[slotName]
+		if slot and slot.Name ~= "" then
+			count = count + 1
+		end
+	end
+	
+	return count
+end
+
+function ShopService:GetUniqueKillerPerks(playerData)
+	if not playerData or not playerData.Perks then
+		return {}
+	end
+	
+	local uniquePerks = {}
+	for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
+		local slot = playerData.Perks[slotName]
+		if slot and slot.Name ~= "" then
+			uniquePerks[slot.Name] = true
+		end
+	end
+	
+	return uniquePerks
+end
+
 function ShopService.Client:PurchasePerk(player, perkName)
 	local session = DataService.getSession(player)
 	if not session or not session.Data then
@@ -94,6 +126,7 @@ function ShopService.Client:PurchasePerk(player, perkName)
 	end
 
 	local availableSlot = nil
+	-- First check if player already has this perk and can add more
 	for _, slot in pairs({"Slot1", "Slot2", "Slot3"}) do
 		if session.Data.Perks[slot].Name == perkName then
 			availableSlot = slot
@@ -101,7 +134,14 @@ function ShopService.Client:PurchasePerk(player, perkName)
 		end
 	end
 
+	-- If not found, look for empty slot
 	if not availableSlot then
+		-- Check if player has reached the limit of 3 slots
+		local equippedCount = self.Server:GetEquippedKillerPerksCount(session.Data)
+		if equippedCount >= 3 then
+			return false, "Maximum abilities reached (3/3)"
+		end
+		
 		if session.Data.Perks.Slot1.Name == "" then
 			availableSlot = "Slot1"
 		elseif session.Data.Perks.Slot2.Name == "" then
@@ -133,17 +173,8 @@ function ShopService:UpdatePlayerShops(shopItems)
 	for _, player in pairs(Players:GetPlayers()) do
 		local session = DataService.getSession(player)
 		if session and session.Data then
-			local needsReset = false
-			if session.Data.Shop then
-				local count = 0
-				for _ in pairs(session.Data.Shop) do count += 1 end
-				if #session.Data.Shop > 0 or next(session.Data.Shop) == nil then
-					needsReset = true
-				end
-			else
-				needsReset = true
-			end
-			if needsReset then
+			-- Always regenerate shop if it's empty or corrupted
+			if not session.Data.Shop or next(session.Data.Shop) == nil then
 				session.Data.Shop = {}
 				session.Data.RestockTimer = 15 * 60
 				for _, item in pairs(shopItems) do
@@ -152,6 +183,7 @@ function ShopService:UpdatePlayerShops(shopItems)
 				DataService:Replicate(player, {"Shop", "RestockTimer"})
 			end
 		else
+			-- Retry after a delay if session data is not available yet
 			task.spawn(function()
 				task.wait(2)
 				local retrySession = DataService.getSession(player)

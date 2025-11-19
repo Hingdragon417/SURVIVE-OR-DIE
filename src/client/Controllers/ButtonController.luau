@@ -31,6 +31,7 @@ local ButtonController = Knit.CreateController({
 })
 
 local SpectateController
+local RoundService
 local buttonTweens = {}
 local buttonHoverStates = {} 
 local frameTweens = {}
@@ -331,7 +332,39 @@ function ButtonController:SetupButtons(uiScreen: Instance) : any
     end
 end
 
-function ButtonController:KnitStart() 
+function ButtonController:KnitStart()
+    if not RoundService then
+        RoundService = Knit.GetService("RoundService")
+    end
+    
+    local isInRound = false
+    
+    RoundService.StatusChanged:Connect(function(status)
+        print("[DEBUG] ButtonController status changed:", status)
+        if status:match("^Round") then
+            if isInRound then
+                buttons.Visible = false
+                for _, frame in frames:GetChildren() do
+                    if frame:IsA("Frame") or frame:IsA("GuiObject") then
+                        frame.Visible = false
+                    end
+                end
+                print("[DEBUG] Hiding buttons and frames")
+            else
+                print("[DEBUG] Player not in round, skipping hide")
+            end
+        end
+    end)
+    
+    RoundService.PerksEnabled:Connect(function(enabled)
+        print("[DEBUG] ButtonController PerksEnabled:", enabled)
+        isInRound = enabled
+        if not enabled then
+            buttons.Visible = true
+            print("[DEBUG] Player removed from round, showing buttons")
+        end
+    end)
+    
     local setupButtons = {}
     
     for _, descendant in ipairs(playerGUI:GetDescendants()) do

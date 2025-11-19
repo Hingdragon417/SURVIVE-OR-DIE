@@ -10,12 +10,12 @@ local KnifeService = Knit.CreateService({
     Client = {
         KnifeAttack = "KnifeAttack",
     },
-    _attackDebounce = {},
-    _originalSpeeds = {}
+    _attackDebounce = {}
 })
 
 local QuestService
 local PerkEffectsService
+local RoundService
 
 function KnifeService.Client:KnifeAttack(player: Player)
     if KnifeService._attackDebounce[player.UserId] then
@@ -37,15 +37,16 @@ function KnifeService.Client:KnifeAttack(player: Player)
         return 
     end
     
-    local currentSpeed = humanoid.WalkSpeed
-    if currentSpeed ~= 5 then
-        KnifeService._originalSpeeds[player.UserId] = currentSpeed
+    if not RoundService then
+        RoundService = Knit.GetService("RoundService")
     end
     
-    local originalSpeed = KnifeService._originalSpeeds[player.UserId] or 16
-    humanoid.WalkSpeed = 5
+    local isKiller = (RoundService.Killer == player)
+    local originalSpeed = isKiller and 18 or 16
     
-    task.delay(1, function()
+    humanoid.WalkSpeed = 1
+    
+    task.delay(2, function()
         local char = player.Character
         if char then
             local hum = char:FindFirstChild("Humanoid")
@@ -53,14 +54,15 @@ function KnifeService.Client:KnifeAttack(player: Player)
                 hum.WalkSpeed = originalSpeed
             end
         end
-        
-        task.wait(1)
+    end)
+    
+    task.delay(3, function()
         KnifeService._attackDebounce[player.UserId] = nil
     end)
     
     local hitbox = Instance.new("Part")
     hitbox.Name = "KnifeHitbox"
-    hitbox.Size = Vector3.new(2.5, 2.5, 2.5)
+    hitbox.Size = Vector3.new(1.5, 1.5, 1.5)
     hitbox.CFrame = rootPart.CFrame * CFrame.new(0, 0, -5.5)
     hitbox.Anchored = false
     hitbox.CanCollide = false
@@ -143,12 +145,12 @@ end
 function KnifeService:KnitStart()
     Players.PlayerRemoving:Connect(function(player)
         KnifeService._attackDebounce[player.UserId] = nil
-        KnifeService._originalSpeeds[player.UserId] = nil
     end)
 end
 
 function KnifeService:KnitInit()
     QuestService = Knit.GetService("QuestService")
+    RoundService = Knit.GetService("RoundService")
 end
 
 return KnifeService
