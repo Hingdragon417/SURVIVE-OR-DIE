@@ -1,60 +1,53 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 
 local Packages = ReplicatedStorage.Packages
 local Knit = require(Packages.Knit)
 
 local player = Players.LocalPlayer
 local playerGUI = player:WaitForChild("PlayerGui")
+local mainGui = playerGUI:WaitForChild("Main")
+local framesFolder = mainGui:WaitForChild("Frames")
+local watchFrame = framesFolder:WaitForChild("Watch")
+local watchContent = watchFrame:WaitForChild("Content")
+local leftButton = watchContent:WaitForChild("Left")
+local rightButton = watchContent:WaitForChild("Right")
+local exitButton = watchFrame:WaitForChild("Exit")
+local usernameLabel = watchContent:WaitForChild("Username")
 
 local SpectateController = Knit.CreateController({
     Name = "SpectateController",
 })
 
 local RoundService
+local NotificationController
 local playersInRound = {}
 local currentSpectateIndex = 1
 local isSpectating = false
-local spectateClickConnection = nil
+local uiConnections = {}
+
+local function setUsername(targetPlayer: Player?)
+    if usernameLabel and usernameLabel:IsA("TextLabel") then
+        usernameLabel.Text = targetPlayer and targetPlayer.Name or ""
+    end
+end
 
 function SpectateController:StartSpectating()
     if isSpectating then return end
     
-    self:UpdatePlayersInRound()
-    task.wait(0.1)
-    
-    if #playersInRound == 0 then
-        warn("[SpectateController] No other players to spectate")
-        return
-    end
-    
-    isSpectating = true
-    self:SpectateNext()
-    
-    if spectateClickConnection then
-        spectateClickConnection:Disconnect()
-    end
-    
-    spectateClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local mousePos = UserInputService:GetMouseLocation()
-            local guiObjects = playerGUI:GetGuiObjectsAtPosition(mousePos.X, mousePos.Y)
-            
-            local clickedWatchButton = false
-            for _, obj in guiObjects do
-                if obj.Name == "Watch" and (obj:IsA("GuiButton") or obj:IsA("ImageButton")) then
-                    clickedWatchButton = true
-                    break
-                end
+    self:UpdatePlayersInRound():andThen(function()
+        if #playersInRound == 0 then
+            if NotificationController then
+                NotificationController:ShowWarning("No players are available to spectate.")
+            else
+                warn("[SpectateController] No other players to spectate")
             end
-            
-            if not clickedWatchButton then
-                self:SpectateNext()
-            end
+            return
         end
+
+        isSpectating = true
+        watchFrame.Visible = true
+        self:SpectateNext()
     end)
 end
 
@@ -63,7 +56,7 @@ function SpectateController:IsSpectating(): boolean
 end
 
 function SpectateController:UpdatePlayersInRound()
-    RoundService:GetPlayersInRound():andThen(function(players)
+    return RoundService:GetPlayersInRound():andThen(function(players)
         playersInRound = {}
         for _, p in ipairs(players or {}) do
             if p ~= player then
@@ -72,6 +65,9 @@ function SpectateController:UpdatePlayersInRound()
         end
     end):catch(function(err)
         warn("[SpectateController] Failed to get players in round:", err)
+        if NotificationController then
+            NotificationController:ShowWarning("Could not load players to spectate.")
+        end
     end)
 end
 
@@ -107,7 +103,11 @@ function SpectateController:SpectatePlayer(targetPlayer: Player)
     end
     
     if #playersInRound == 0 then
-        warn("[SpectateController] No other players to spectate")
+        if NotificationController then
+            NotificationController:ShowWarning("No players are available to spectate.")
+        else
+            warn("[SpectateController] No other players to spectate")
+        end
         self:StopSpectating()
         return
     end
@@ -119,17 +119,16 @@ function SpectateController:SpectatePlayer(targetPlayer: Player)
     if character and character:FindFirstChild("Humanoid") then
         camera.CameraSubject = character.Humanoid
     end
+
+    setUsername(targetPlayer)
 end
 
 function SpectateController:StopSpectating()
     if not isSpectating then return end
     
     isSpectating = false
-    
-    if spectateClickConnection then
-        spectateClickConnection:Disconnect()
-        spectateClickConnection = nil
-    end
+    watchFrame.Visible = false
+    setUsername(nil)
     
     local camera = workspace.CurrentCamera
     if not camera then return end
@@ -142,17 +141,34 @@ function SpectateController:StopSpectating()
 end
 
 function SpectateController:KnitStart()
+    watchFrame.Visible = false
+
+    table.insert(uiConnections, leftButton.MouseButton1Click:Connect(function()
+        self:SpectatePrevious()
+    end))
+
+    table.insert(uiConnections, rightButton.MouseButton1Click:Connect(function()
+        self:SpectateNext()
+    end))
+
+    table.insert(uiConnections, exitButton.MouseButton1Click:Connect(function()
+        self:StopSpectating()
+    end))
+
     self:UpdatePlayersInRound()
 end
 
 function SpectateController:KnitInit()
     RoundService = Knit.GetService("RoundService")
+    NotificationController = Knit.GetController("NotificationController")
     
     isSpectating = false
-    if spectateClickConnection then
-        spectateClickConnection:Disconnect()
-        spectateClickConnection = nil
+    for _, connection in ipairs(uiConnections) do
+        if connection then
+            connection:Disconnect()
+        end
     end
+    uiConnections = {}
 end
 
 return SpectateController

@@ -96,6 +96,16 @@ local currentFrame : Frame
 
 local isDebounce = false
 
+local function stopSpectatingForFrame(buttonName: string)
+    if buttonName == "Watch" then
+        return
+    end
+
+    if SpectateController and SpectateController:IsSpectating() then
+        SpectateController:StopSpectating()
+    end
+end
+
 local function hideFrame(frame)
     if frameTweens[frame] then
         frameTweens[frame]:Cancel()
@@ -239,6 +249,8 @@ function ButtonController:ClickedButtonTween(button : GuiButton | ImageButton)
         return
     end
 
+    stopSpectatingForFrame(button.Name)
+
     local isCurrentlyActive = (currentFrame == SelectedFrame)
 
     if not isCurrentlyActive then
@@ -340,7 +352,6 @@ function ButtonController:KnitStart()
     local isInRound = false
     
     RoundService.StatusChanged:Connect(function(status)
-        print("[DEBUG] ButtonController status changed:", status)
         if status:match("^Round") then
             if isInRound then
                 buttons.Visible = false
@@ -349,19 +360,14 @@ function ButtonController:KnitStart()
                         frame.Visible = false
                     end
                 end
-                print("[DEBUG] Hiding buttons and frames")
-            else
-                print("[DEBUG] Player not in round, skipping hide")
             end
         end
     end)
     
     RoundService.PerksEnabled:Connect(function(enabled)
-        print("[DEBUG] ButtonController PerksEnabled:", enabled)
         isInRound = enabled
         if not enabled then
             buttons.Visible = true
-            print("[DEBUG] Player removed from round, showing buttons")
         end
     end)
     

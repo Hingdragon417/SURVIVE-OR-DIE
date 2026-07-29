@@ -15,6 +15,7 @@ local DataService
 local RoleShowController
 local PerkEffectsService
 local RoundService
+local NotificationController
 
 local UtilBarController = Knit.CreateController({
 	Name = "UtilBarController",
@@ -39,9 +40,18 @@ local keyBindings = {
 }
 
 function UtilBarController:UseAbility(slotName)
-	if not self._perksEnabled then return end
+	if not self._perksEnabled then
+		if NotificationController then
+			NotificationController:ShowWarning("Perks are not available right now.")
+		end
+		return
+	end
 	
 	if self._cooldowns[slotName] and tick() < self._cooldowns[slotName] then
+		if NotificationController then
+			local remaining = math.max(1, math.ceil(self._cooldowns[slotName] - tick()))
+			NotificationController:ShowWarning(string.format("Ability on cooldown (%ds).", remaining))
+		end
 		return
 	end
 	
@@ -61,7 +71,7 @@ function UtilBarController:UseKillerPerks(slotName)
 	if not playerData or not playerData.Perks then return end
 
 	local PerksSlot = playerData.Perks[slotName]
-	if not PerksSlot or PerksSlot.Name == "" or not PerksSlot.Quantity or PerksSlot.Quantity <= 0 then 
+	if not PerksSlot or PerksSlot.Name == "" then 
 		return 
 	end
 
@@ -76,15 +86,28 @@ function UtilBarController:UseKillerPerks(slotName)
 			PerkEffectsService:UsePerk(PerksSlot.Name, true):andThen(function(effectSuccess)
 				if not effectSuccess then
 					warn("Failed to activate killer perk effect:", PerksSlot.Name)
+					if NotificationController then
+						NotificationController:ShowWarning("Could not activate that perk.")
+					end
 				end
 			end):catch(function(err)
 				warn("Error activating killer perk:", err)
+				if NotificationController then
+					NotificationController:ShowWarning("Could not activate that perk.")
+				end
 			end)
 		else
-			warn("Failed to use killer perk:", message)
+			if NotificationController then
+				NotificationController:ShowWarning(message or "Could not use that perk.")
+			else
+				warn("Failed to use killer perk:", message)
+			end
 		end
 	end):catch(function(err)
 		warn("Error using killer perk:", err)
+		if NotificationController then
+			NotificationController:ShowWarning("Could not use that perk right now.")
+		end
 	end)
 end
 
@@ -106,15 +129,28 @@ function UtilBarController:UseSurvivorPerks(slotName)
 			PerkEffectsService:UsePerk(PerkSlot.Name, false):andThen(function(effectSuccess)
 				if not effectSuccess then
 					warn("Failed to activate survivor perk effect:", PerkSlot.Name)
+					if NotificationController then
+						NotificationController:ShowWarning("Could not activate that perk.")
+					end
 				end
 			end):catch(function(err)
 				warn("Error activating survivor perk:", err)
+				if NotificationController then
+					NotificationController:ShowWarning("Could not activate that perk.")
+				end
 			end)
 		else
-			warn("Failed to use survivor perk:", message)
+			if NotificationController then
+				NotificationController:ShowWarning(message or "Could not use that perk.")
+			else
+				warn("Failed to use survivor perk:", message)
+			end
 		end
 	end):catch(function(err)
 		warn("Error using survivor perk:", err)
+		if NotificationController then
+			NotificationController:ShowWarning("Could not use that perk right now.")
+		end
 	end)
 end
 
@@ -223,7 +259,7 @@ function UtilBarController:UpdateUI()
 			end
 		end
 
-		if slot.Name ~= "" and slot.Quantity and slot.Quantity > 0 then
+		if slot.Name ~= "" then
 			local itemData = isKiller and KillerPerks[slot.Name] or SurvivorPerks[slot.Name]
 			if itemData then
 				local imageLabel = newTemplate:FindFirstChild("ImageLabel")
@@ -236,14 +272,14 @@ function UtilBarController:UpdateUI()
 					nameLabel.Text = slot.Name
 				end
 
-			local quantityLabel = newTemplate:FindFirstChild("Quantity")
-			if quantityLabel then
-				quantityLabel.Text = "x" .. slot.Quantity
-				quantityLabel.Visible = true
-			end
+				local quantityLabel = newTemplate:FindFirstChild("Quantity")
+				if quantityLabel then
+					quantityLabel.Visible = false
+				end
 			
-			newTemplate.Visible = self._perksEnabled
-			newTemplate.Parent = bottomContainer				if newTemplate:IsA("TextButton") or newTemplate:IsA("ImageButton") then
+				newTemplate.Visible = self._perksEnabled
+				newTemplate.Parent = bottomContainer
+				if newTemplate:IsA("TextButton") or newTemplate:IsA("ImageButton") then
 					newTemplate.Activated:Connect(function()
 						self:UseAbility(slotName)
 					end)
@@ -275,16 +311,6 @@ function UtilBarController:KnitStart()
 		self:UpdateUI()
 	end))
 
-	table.insert(self._connections, DataController.onReplicated("Shop"):Connect(function()
-		task.wait()
-		self:UpdateUI()
-	end))
-
-	table.insert(self._connections, DataController.onReplicated("Coins"):Connect(function()
-		task.wait()
-		self:UpdateUI()
-	end))
-
 	table.insert(self._connections, RoleShowController:OnRoleChanged(function()
 		self:UpdateUI()
 		-- Update equipped count display when role changes
@@ -294,7 +320,6 @@ function UtilBarController:KnitStart()
 		end
 	end))
 
-	task.wait(1)
 	self:UpdateUI()
 end
 
@@ -302,6 +327,7 @@ function UtilBarController:KnitInit()
 	DataController = Knit.GetController("DataController")
 	DataService = Knit.GetService("DataService")
 	RoleShowController = Knit.GetController("RoleShowController")
+	NotificationController = Knit.GetController("NotificationController")
 	PerkEffectsService = Knit.GetService("PerkEffectsService")
 	RoundService = Knit.GetService("RoundService")
 	

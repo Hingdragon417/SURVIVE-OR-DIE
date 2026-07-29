@@ -1,7 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Packages = ReplicatedStorage.Packages
-local Assets = ReplicatedStorage.Assets
 local Shared = ReplicatedStorage.Shared
 
 local Knit = require(Packages.Knit)
@@ -10,130 +9,136 @@ local SurvivorPerks = require(Shared.Data.SurvivorPerks)
 local DataService
 
 local SurvivorPerksService = Knit.CreateService({
-    Name = "SurvivorPerksService",
-    Client = {
-        PurchaseSurvivorPerk = "PurchaseSurvivorPerk",
-    },
-    _purchaseLocks = {},
+	Name = "SurvivorPerksService",
+	Client = {
+		PurchaseSurvivorPerk = "PurchaseSurvivorPerk",
+	},
+	_purchaseLocks = {},
 })
 
-function SurvivorPerksService:GetEquippedSurvivorPerksCount(playerData)
-    if not playerData or not playerData.SurvivorPerks then
-        return 0
-    end
-    
-    local count = 0
-    for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
-        local slot = playerData.SurvivorPerks[slotName]
-        if slot and slot.Name ~= "" then
-            count = count + 1
-        end
-    end
-    
-    return count
+local SLOT_ORDER = {"Slot1", "Slot2", "Slot3"}
+
+local function ensureOwnedTable(data)
+	data.OwnedSurvivorPerks = data.OwnedSurvivorPerks or {}
+	for _, slotName in ipairs(SLOT_ORDER) do
+		local slot = data.SurvivorPerks and data.SurvivorPerks[slotName]
+		if slot and slot.Name ~= "" then
+			data.OwnedSurvivorPerks[slot.Name] = true
+		end
+	end
+	return data.OwnedSurvivorPerks
 end
 
-function SurvivorPerksService:GetUniqueSurvivorPerks(playerData)
-    if not playerData or not playerData.SurvivorPerks then
-        return {}
-    end
-    
-    local uniquePerks = {}
-    for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
-        local slot = playerData.SurvivorPerks[slotName]
-        if slot and slot.Name ~= "" then
-            uniquePerks[slot.Name] = true
-        end
-    end
-    
-    return uniquePerks
+local function getEquippedMana(data)
+	local total = 0
+	for _, slotName in ipairs(SLOT_ORDER) do
+		local slot = data.SurvivorPerks and data.SurvivorPerks[slotName]
+		local perkData = slot and SurvivorPerks[slot.Name]
+		if perkData then
+			total += perkData.ManaCost or 1
+		end
+	end
+	return total
+end
+
+local function findEquippedSlot(data, perkName)
+	for _, slotName in ipairs(SLOT_ORDER) do
+		local slot = data.SurvivorPerks and data.SurvivorPerks[slotName]
+		if slot and slot.Name == perkName then
+			return slotName
+		end
+	end
+	return nil
+end
+
+local function findEmptySlot(data)
+	for _, slotName in ipairs(SLOT_ORDER) do
+		local slot = data.SurvivorPerks and data.SurvivorPerks[slotName]
+		if slot and slot.Name == "" then
+			return slotName
+		end
+	end
+	return nil
+end
+
+function SurvivorPerksService:GetEquippedSurvivorPerkMana(playerData)
+	if not playerData or not playerData.SurvivorPerks then
+		return 0
+	end
+
+	return getEquippedMana(playerData)
 end
 
 function SurvivorPerksService.Client:PurchaseSurvivorPerk(player: Player, perkName: string)
-    local lockKey = player.UserId .. "_" .. perkName
-    if SurvivorPerksService._purchaseLocks[lockKey] then
-        return false, "Purchase in progress"
-    end
-    
-    SurvivorPerksService._purchaseLocks[lockKey] = true
-    
-    local abilityData = SurvivorPerks[perkName]
-    if not abilityData then
-        SurvivorPerksService._purchaseLocks[lockKey] = false
-        return false, "Invalid ability"
-    end
+	local lockKey = player.UserId .. "_" .. perkName
+	if SurvivorPerksService._purchaseLocks[lockKey] then
+		return false, "Purchase in progress"
+	end
 
-    local session = DataService.getSession(player)
-    if not session or not session.Data then
-        SurvivorPerksService._purchaseLocks[lockKey] = false
-        return false, "Data not found"
-    end
-    
-    local data = session.Data
-    
-    local currentAmount = 0
-    local availableSlot = nil
-    
-    for _, slotName in pairs({"Slot1", "Slot2", "Slot3"}) do
-        local slot = data.SurvivorPerks[slotName]
-        if slot.Name == perkName then
-            currentAmount += slot.Quantity
-            if not availableSlot then
-                availableSlot = slotName
-            end
-        elseif slot.Name == "" and not availableSlot then
-            availableSlot = slotName
-        end
-    end
+	SurvivorPerksService._purchaseLocks[lockKey] = true
 
-    if currentAmount >= abilityData.MaxAmount then
-        SurvivorPerksService._purchaseLocks[lockKey] = false
-        return false, "Maximum amount reached"
-    end
+	local perkData = SurvivorPerks[perkName]
+	if not perkData then
+		SurvivorPerksService._purchaseLocks[lockKey] = false
+		return false, "Invalid perk"
+	end
 
-    if data.Coins < abilityData.Price then
-        SurvivorPerksService._purchaseLocks[lockKey] = false
-        return false, "Not enough coins"
-    end
-    
-    if not availableSlot then
-        -- Check if player has reached the limit of 3 slots
-        local equippedCount = self.Server:GetEquippedSurvivorPerksCount(data)
-        if equippedCount >= 3 then
-            SurvivorPerksService._purchaseLocks[lockKey] = false
-            return false, "Maximum abilities reached (3/3)"
-        else
-            SurvivorPerksService._purchaseLocks[lockKey] = false
-            return false, "No available slots"
-        end
-    end
+	local session = DataService.getSession(player)
+	if not session or not session.Data then
+		SurvivorPerksService._purchaseLocks[lockKey] = false
+		return false, "Data not found"
+	end
 
-    data.Coins -= abilityData.Price
-    
-    if data.SurvivorPerks[availableSlot].Name == perkName then
-        data.SurvivorPerks[availableSlot].Quantity += 1
-    else
-        data.SurvivorPerks[availableSlot].Name = perkName
-        data.SurvivorPerks[availableSlot].Quantity = 1
-    end
-    
-    DataService:Replicate(player, {"Coins", "SurvivorPerks"})
-    
-    task.delay(0.1, function()
-        SurvivorPerksService._purchaseLocks[lockKey] = false
-    end)
+	local data = session.Data
+	local ownedPerks = ensureOwnedTable(data)
+	local equippedSlot = findEquippedSlot(data, perkName)
 
-    return true, "Purchase successful"
+	if equippedSlot then
+		data.SurvivorPerks[equippedSlot].Name = ""
+		data.SurvivorPerks[equippedSlot].Quantity = 0
+		DataService:Replicate(player, {"SurvivorPerks"})
+		SurvivorPerksService._purchaseLocks[lockKey] = false
+		return true, "Unequipped"
+	end
+
+	if not ownedPerks[perkName] then
+		if data.Coins < perkData.Price then
+			SurvivorPerksService._purchaseLocks[lockKey] = false
+			return false, "Not enough coins"
+		end
+
+		data.Coins -= perkData.Price
+		ownedPerks[perkName] = true
+		DataService:Replicate(player, {"Coins", "OwnedSurvivorPerks"})
+		SurvivorPerksService._purchaseLocks[lockKey] = false
+		return true, "Purchased"
+	end
+
+	local availableSlot = findEmptySlot(data)
+	if not availableSlot then
+		DataService:Replicate(player, {"Coins", "OwnedSurvivorPerks"})
+		SurvivorPerksService._purchaseLocks[lockKey] = false
+		return false, "No available slots"
+	end
+
+	local maxMana = data.MaxSurvivorPerkMana or 3
+	local nextMana = getEquippedMana(data) + (perkData.ManaCost or 1)
+	if nextMana > maxMana then
+		DataService:Replicate(player, {"Coins", "OwnedSurvivorPerks"})
+		SurvivorPerksService._purchaseLocks[lockKey] = false
+		return false, "Not enough perk mana"
+	end
+
+	data.SurvivorPerks[availableSlot].Name = perkName
+	data.SurvivorPerks[availableSlot].Quantity = 1
+
+	DataService:Replicate(player, {"Coins", "SurvivorPerks", "OwnedSurvivorPerks"})
+	SurvivorPerksService._purchaseLocks[lockKey] = false
+	return true, "Equipped"
 end
 
-function SurvivorPerksService:KnitInit() 
-    DataService = Knit.GetService("DataService")
-end
-
-function SurvivorPerksService:KnitStart()
-    while not DataService do
-        task.wait()
-    end
+function SurvivorPerksService:KnitInit()
+	DataService = Knit.GetService("DataService")
 end
 
 return SurvivorPerksService

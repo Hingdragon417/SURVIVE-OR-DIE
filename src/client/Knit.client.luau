@@ -1,5 +1,4 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local StarterGui = game:GetService("StarterGui")
 local Players = game:GetService("Players")
 
 local Packages = ReplicatedStorage.Packages
@@ -12,6 +11,8 @@ local camera = workspace.CurrentCamera
 local BASE_SIZE = 1920
 
 local cameraConnection
+local coinsTextLabel: TextLabel?
+local lastDisplayedCoins: number?
 
 local function formatCoins(amount: number): string
 	if not amount or type(amount) ~= "number" then
@@ -33,23 +34,32 @@ local function updateCoinsDisplay(coins: number)
 	if not coins or type(coins) ~= "number" then
 		return
 	end
+
+	if coins == lastDisplayedCoins then
+		return
+	end
 	
-	local mainGui = playerGui:FindFirstChild("Main")
-	if not mainGui then return end
+	if not coinsTextLabel or not coinsTextLabel.Parent then
+		local mainGui = playerGui:FindFirstChild("Main")
+		if not mainGui then return end
+
+		local leftContainer = mainGui:FindFirstChild("LeftContainer")
+		if not leftContainer then return end
+
+		local coinsFrame = leftContainer:FindFirstChild("Coins")
+		if not coinsFrame then return end
+
+		local amount = coinsFrame:FindFirstChild("Amount")
+		if not amount then return end
+
+		local textLabel = amount:FindFirstChild("Text")
+		if not textLabel or not textLabel:IsA("TextLabel") then return end
+
+		coinsTextLabel = textLabel
+	end
 	
-	local leftContainer = mainGui:FindFirstChild("LeftContainer")
-	if not leftContainer then return end
-	
-	local coinsFrame = leftContainer:FindFirstChild("Coins")
-	if not coinsFrame then return end
-	
-	local amount = coinsFrame:FindFirstChild("Amount")
-	if not amount then return end
-	
-	local textLabel = amount:FindFirstChild("Text")
-	if not textLabel or not textLabel:IsA("TextLabel") then return end
-	
-	textLabel.Text = formatCoins(coins)
+	lastDisplayedCoins = coins
+	coinsTextLabel.Text = formatCoins(coins)
 end
 
 local function updateAllUIStrokeThickness()
@@ -89,20 +99,14 @@ do
             
             task.spawn(function()
                 local playerData = DataController.waitForData()
-                
-                while not playerData.Coins do
-                    task.wait(0.1)
-                    playerData = DataController.getData()
-                end
-                
-                DataController.onReplicated():Connect(function()
+                updateCoinsDisplay(playerData.Coins or 0)
+
+                DataController.onReplicated("Coins"):Connect(function()
                     local data = DataController.getData()
-                    if data and data.Coins then
-                        updateCoinsDisplay(data.Coins)
+                    if data then
+                        updateCoinsDisplay(data.Coins or 0)
                     end
                 end)
-                
-                updateCoinsDisplay(playerData.Coins)
             end)
         end)
         :catch(warn)

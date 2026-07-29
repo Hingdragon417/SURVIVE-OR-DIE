@@ -1,8 +1,8 @@
 return {
     ["Invisibility"] = {
         Image = 133355043444426,
-        MaxAmount = 1,
         Price = 175,
+        ManaCost = 3,
         Cooldown = 25,
         Duration = 3,
         Name = "Invisibility",
@@ -10,8 +10,8 @@ return {
     },
 	["Heal"] = {
 		Image = 133355043444426,
-		MaxAmount = 2,
 		Price = 100,
+		ManaCost = 1,
 		Cooldown = 19,
 		Name = "Heal",
 		Description = "Instantly heal 50 HP.",
@@ -19,8 +19,8 @@ return {
 	},
 	["Sprint Burst"] = {
 		Image = 114124336527832,
-		MaxAmount = 2,
 		Price = 150,
+		ManaCost = 2,
 		Cooldown = 20,
 		Name = "Sprint Burst",
 		Description = "Massive speed boost for a short time.",
@@ -29,8 +29,8 @@ return {
 	},
 	["Quick Fix"] = {
 		Image = 133355043444426,
-		MaxAmount = 3,
 		Price = 75,
+		ManaCost = 1,
 		Cooldown = 15,
 		Name = "Quick Fix",
 		Description = "Repair generators 100% faster for 10 seconds.",

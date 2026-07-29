@@ -200,15 +200,8 @@ function DataService.Client:UseSurvivorPerk(player: Player, slotName: string)
 	end
 
 	local perkSlot = session.Data.SurvivorPerks[slotName]
-	if not perkSlot or perkSlot.Name == "" or perkSlot.Quantity <= 0 then
+	if not perkSlot or perkSlot.Name == "" then
 		return false, "No survivor perk found in slot"
-	end
-
-	perkSlot.Quantity -= 1
-	
-	if perkSlot.Quantity <= 0 then
-		perkSlot.Name = ""
-		perkSlot.Quantity = 0
 	end
 	
 	local QuestService = Knit.GetService("QuestService")
@@ -216,7 +209,6 @@ function DataService.Client:UseSurvivorPerk(player: Player, slotName: string)
 		QuestService:UpdateProgress(player, "Use 10 Perks", 1)
 	end
 	
-	DataService:Replicate(player, "SurvivorPerks")
 	return true, "Success"
 end
 
@@ -227,15 +219,8 @@ function DataService.Client:UseKillerPerk(player: Player, slotName: string)
 	end
 
 	local perkSlot = session.Data.Perks[slotName]
-	if not perkSlot or perkSlot.Name == "" or perkSlot.Quantity <= 0 then
+	if not perkSlot or perkSlot.Name == "" then
 		return false, "No perk found in slot"
-	end
-
-	perkSlot.Quantity -= 1
-	
-	if perkSlot.Quantity <= 0 then
-		perkSlot.Name = ""
-		perkSlot.Quantity = 0
 	end
 	
 	local QuestService = Knit.GetService("QuestService")
@@ -243,7 +228,6 @@ function DataService.Client:UseKillerPerk(player: Player, slotName: string)
 		QuestService:UpdateProgress(player, "Use 10 Perks", 1)
 	end
 	
-	DataService:Replicate(player, "Perks")
 	return true, "Success"
 end
 

@@ -1,9 +1,9 @@
 return {
 	["Show Players"] = {
 		Image = 16071029634,
-		Stock = 2,
 		Price = 150,
 		Chance = 70,
+		ManaCost = 2,
         Cooldown = 15,
 		Name = "Show Players",
         Description = "Reveal the location of all players.",
@@ -11,9 +11,9 @@ return {
     },
 	["Bloodlust"] = {
 		Image = 16071029634,
-		Stock = 1,
 		Price = 175,
 		Chance = 55,
+		ManaCost = 3,
 		Cooldown = 20,
 		Name = "Bloodlust",
 		Description = "Highlight the closest survivor and deal double damage to them.",
@@ -21,9 +21,9 @@ return {
 	},
 	["Freeze Generators"] = {
 		Image = 16071029634,
-		Stock = 1,
 		Price = 200,
 		Chance = 40,
+		ManaCost = 3,
 		Cooldown = 20,
 		Name = "Freeze Generators",
 		Description = "Prevents all generators from being repaired for 15 seconds.",
@@ -31,9 +31,9 @@ return {
 	},
 	["Blackout"] = {
 		Image = 16071029634,
-		Stock = 5,
 		Price = 125,
 		Chance = 60,
+		ManaCost = 2,
 		Cooldown = 18,
 		Name = "Blackout",
 		Description = "Reduce all survivors' vision dramatically for 10 seconds.",
@@ -41,9 +41,9 @@ return {
 	},
 	["Hunter's Mark"] = {
 		Image = 16071029634,
-		Stock = 2,
 		Price = 100,
 		Chance = 80,
+		ManaCost = 1,
 		Cooldown = 10,
 		Name = "Hunter's Mark",
 		Description = "Mark the nearest survivor, revealing their location for 8 seconds.",

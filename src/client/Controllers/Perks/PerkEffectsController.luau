@@ -37,7 +37,6 @@ local function applyBlackout(duration: number)
 end
 
 local function freezeGeneratorsUI(duration: number)
-    print("[PerkEffects] Generators frozen for", duration, "seconds")
 end
 
 local function applyInvisibility(duration: number)

@@ -21,6 +21,7 @@ local QuestController = Knit.CreateController({
 })
 
 local QuestService
+local NotificationController
 local activeQuests = {}
 local resetTime = 0
 
@@ -92,6 +93,9 @@ local function updateQuestDisplay()
         end
     end):catch(function(err)
         warn("[QuestController] Failed to get player progress:", err)
+        if NotificationController then
+            NotificationController:ShowWarning("Could not load quest progress.")
+        end
     end)
 end
 
@@ -132,6 +136,9 @@ function QuestController:KnitStart()
             updateTimer()
         end):catch(function(err)
             warn("[QuestController] Failed to get active quests:", err)
+            if NotificationController then
+                NotificationController:ShowWarning("Could not load quests. Retrying...")
+            end
             -- Retry on error
             task.wait(2)
             loadQuests()
@@ -158,6 +165,7 @@ end
 
 function QuestController:KnitInit()
     QuestService = Knit.GetService("QuestService")
+    NotificationController = Knit.GetController("NotificationController")
 end
 
 return QuestController

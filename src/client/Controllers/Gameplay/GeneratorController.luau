@@ -3,6 +3,7 @@ local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local CollectionService = game:GetService("CollectionService")
 
 local Packages = ReplicatedStorage.Packages
 local Knit = require(Packages.Knit)
@@ -16,6 +17,8 @@ local GeneratorController = Knit.CreateController({
 })
 
 local GeneratorService
+local RoleShowController
+local NotificationController
 local currentGenerator = nil
 local currentGeneratorObject = nil
 local activeButtons = {}
@@ -28,6 +31,14 @@ local generatorCooldownConnection = nil
 local initialPosition = nil
 local buttonTimeLimit = 2.5
 local roundTransitioning = false -- Add flag to track round transitions
+local progressTween = nil
+local progressTweenTarget: number? = nil
+local completedGenerators = {}
+local generatorHighlights = {}
+
+local DEFAULT_GENERATOR_FILL = Color3.fromRGB(255, 255, 0)
+local DEFAULT_GENERATOR_OUTLINE = Color3.fromRGB(255, 255, 255)
+local FAIL_GENERATOR_FILL = Color3.fromRGB(255, 0, 0)
 
 local function clearButtons()
     for _, button in ipairs(activeButtons) do
@@ -167,69 +178,193 @@ local function spawnButton(clickBox: Frame)
     table.insert(activeButtons, button)
 end
 
-local function updateProgressBar(progress: number)
+local function getProgressFrame(warnMissing: boolean?)
     local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
-    if not generatorFrame then return end
+    if not generatorFrame then return nil end
     
     local content = generatorFrame:FindFirstChild("Content")
     if not content then 
-        warn("Content not found in GeneratorFrame")
-        return 
+        if warnMissing then warn("Content not found in GeneratorFrame") end
+        return nil
     end
     
     local backgroundProgress = content:FindFirstChild("BackgroundProgress")
     if not backgroundProgress then 
-        warn("BackgroundProgress not found in Content")
-        return 
+        if warnMissing then warn("BackgroundProgress not found in Content") end
+        return nil
     end
     
     local progressFrame = backgroundProgress:FindFirstChild("Progress")
     if not progressFrame then 
-        warn("Progress frame not found in BackgroundProgress")
-        return 
+        if warnMissing then warn("Progress frame not found in BackgroundProgress") end
+        return nil
     end
+
+    return progressFrame
+end
+
+local function getGeneratorId(generatorObject: Instance): string
+    return generatorObject:GetAttribute("GeneratorId") or generatorObject.Parent and generatorObject.Parent.Name or generatorObject:GetFullName()
+end
+
+local function getHighlightTarget(generatorObject: Instance): Instance
+    if generatorObject:IsA("Model") then
+        return generatorObject
+    end
+
+    return generatorObject.Parent or generatorObject
+end
+
+local function removeGeneratorHighlight(generatorObject: Instance)
+    local highlight = generatorHighlights[generatorObject]
+    if highlight then
+        highlight:Destroy()
+        generatorHighlights[generatorObject] = nil
+    end
+end
+
+local function getOrCreateGeneratorHighlight(generatorObject: Instance): Highlight?
+    if not RoleShowController or not RoleShowController:IsKiller() then
+        removeGeneratorHighlight(generatorObject)
+        return nil
+    end
+
+    local generatorId = getGeneratorId(generatorObject)
+    if completedGenerators[generatorId] then
+        removeGeneratorHighlight(generatorObject)
+        return nil
+    end
+
+    local highlight = generatorHighlights[generatorObject]
+    if highlight and highlight.Parent then
+        return highlight
+    end
+
+    highlight = Instance.new("Highlight")
+    highlight.Name = "KillerGeneratorHighlight"
+    highlight.FillColor = DEFAULT_GENERATOR_FILL
+    highlight.OutlineColor = DEFAULT_GENERATOR_OUTLINE
+    highlight.FillTransparency = 0.7
+    highlight.OutlineTransparency = 0
+    highlight.Parent = getHighlightTarget(generatorObject)
+    generatorHighlights[generatorObject] = highlight
+
+    return highlight
+end
+
+local function refreshGeneratorHighlights()
+    for generatorObject, _ in pairs(generatorHighlights) do
+        if not generatorObject.Parent then
+            removeGeneratorHighlight(generatorObject)
+        end
+    end
+
+    if not RoleShowController or not RoleShowController:IsKiller() then
+        for generatorObject, _ in pairs(generatorHighlights) do
+            removeGeneratorHighlight(generatorObject)
+        end
+        return
+    end
+
+    for _, generatorObject in ipairs(CollectionService:GetTagged("Generator")) do
+        getOrCreateGeneratorHighlight(generatorObject)
+    end
+end
+
+local function showGeneratorFailure(generatorId: string)
+    if not RoleShowController or not RoleShowController:IsKiller() then
+        return
+    end
+
+    for _, generatorObject in ipairs(CollectionService:GetTagged("Generator")) do
+        if getGeneratorId(generatorObject) == generatorId then
+            local highlight = getOrCreateGeneratorHighlight(generatorObject)
+            if not highlight then
+                return
+            end
+
+            highlight.FillColor = FAIL_GENERATOR_FILL
+            highlight.FillTransparency = 0.35
+
+            task.delay(3, function()
+                if not highlight.Parent then
+                    return
+                end
+
+                highlight.FillColor = DEFAULT_GENERATOR_FILL
+                highlight.FillTransparency = 0.7
+            end)
+            return
+        end
+    end
+end
+
+local function updateProgressBar(progress: number)
+    local progressFrame = getProgressFrame(true)
+    if not progressFrame then return end
     
     if type(progress) ~= "number" then
         warn("[GeneratorController] Invalid progress type:", type(progress), "Value:", progress)
         return
     end
     
-    local targetScale = math.clamp(progress / 100, 0, 1)
+    local targetProgress = math.clamp(progress, 0, 100)
+    local targetScale = targetProgress / 100
+
+    if progressTween then
+        progressTween:Cancel()
+        progressTween = nil
+    end
+    progressTweenTarget = targetProgress
     
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(progressFrame, tweenInfo, {
+    progressTween = TweenService:Create(progressFrame, tweenInfo, {
         Size = UDim2.new(targetScale, 0, 1, 0)
     })
-    tween:Play()
+    local activeTween = progressTween
+    activeTween.Completed:Connect(function()
+        if progressTween == activeTween then
+            progressTween = nil
+        end
+    end)
+    activeTween:Play()
 end
 
 local function setProgressBarImmediate(progress: number)
-    local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
-    if not generatorFrame then 
-        return 
-    end
-    
-    local content = generatorFrame:FindFirstChild("Content")
-    if not content then 
-        return 
-    end
-    
-    local backgroundProgress = content:FindFirstChild("BackgroundProgress")
-    if not backgroundProgress then 
-        return 
-    end
-    
-    local progressFrame = backgroundProgress:FindFirstChild("Progress")
-    if not progressFrame then 
-        return 
-    end
+    local progressFrame = getProgressFrame(false)
+    if not progressFrame then return end
     
     if type(progress) ~= "number" then 
         return 
     end
     
-    local targetScale = math.clamp(progress / 100, 0, 1)
+    if progressTween then
+        progressTween:Cancel()
+        progressTween = nil
+    end
+
+    local targetProgress = math.clamp(progress, 0, 100)
+    local targetScale = targetProgress / 100
+    progressTweenTarget = targetProgress
     progressFrame.Size = UDim2.new(targetScale, 0, 1, 0)
+end
+
+local function syncProgressBar(progress: number)
+    if type(progress) ~= "number" then
+        return
+    end
+
+    if progress <= 0 then
+        setProgressBarImmediate(0)
+        return
+    end
+
+    local targetProgress = math.clamp(progress, 0, 100)
+    if progressTween and progressTweenTarget and math.abs(progressTweenTarget - targetProgress) < 0.01 then
+        return
+    end
+
+    updateProgressBar(targetProgress)
 end
 
 local function reportMissClickAndClose()
@@ -265,12 +400,16 @@ local function disconnectListeners()
 end
 
 function GeneratorController:StartGenerator(generatorObject: Instance)
-    local generatorId = generatorObject:GetAttribute("GeneratorId") or generatorObject.Parent and generatorObject.Parent.Name or generatorObject:GetFullName()
+    local generatorId = getGeneratorId(generatorObject)
     
     -- Check with server if generator can be accessed
-    GeneratorService:CanAccessGenerator(generatorId):andThen(function(canAccess)
+    GeneratorService:CanAccessGenerator(generatorId):andThen(function(canAccess, reason)
         if not canAccess then
-            warn("[GeneratorController] Cannot access generator", generatorId)
+            if NotificationController then
+                NotificationController:ShowWarning(reason or "You cannot repair this generator right now.")
+            else
+                warn("[GeneratorController] Cannot access generator", generatorId)
+            end
             local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
             if generatorFrame then
                 generatorFrame.Visible = false
@@ -281,6 +420,9 @@ function GeneratorController:StartGenerator(generatorObject: Instance)
         self:_StartGeneratorInternal(generatorObject, generatorId)
     end):catch(function(err)
         warn("[GeneratorController] Failed to check generator access:", err)
+        if NotificationController then
+            NotificationController:ShowWarning("Could not check that generator right now.")
+        end
     end)
 end
 
@@ -435,21 +577,18 @@ function GeneratorController:_StartGeneratorInternal(generatorObject: Instance, 
 end
 
 function GeneratorController:ResetForNewRound()
-    print("[DEBUG] ResetForNewRound called")
-    
     -- Set flag to prevent issues during transition
     roundTransitioning = true
+    table.clear(completedGenerators)
+    setProgressBarImmediate(0)
+    refreshGeneratorHighlights()
     
     -- Close any active generator interface
     self:CloseGenerator()
     
-    print("[DEBUG] ResetForNewRound completed")
-    print("[DEBUG] - roundTransitioning flag set to:", roundTransitioning)
-    
     -- Clear the flag after a short delay to allow round to properly start
     task.delay(2, function()
         roundTransitioning = false
-        print("[DEBUG] Round transition flag cleared, generators can now be marked as completed")
     end)
 end
 
@@ -483,21 +622,12 @@ end
 function GeneratorController:KnitStart()
     GeneratorService.GeneratorCooldown:Connect(function(generatorId: string, onCooldown: boolean)
         if generatorId == "all" then
-            -- Server signaling round reset
-            print("[DEBUG] 'all' signal received - server reset generators")
-            
-            -- Set flag to prevent issues during transition
-            roundTransitioning = true
-            
-            print("[DEBUG] 'all' signal processed - roundTransitioning flag set to:", roundTransitioning)
-            
-            -- Clear the flag after a short delay
-            task.delay(2, function()
-                roundTransitioning = false
-                print("[DEBUG] Round transition flag cleared via 'all' signal")
-            end)
-            
+            self:ResetForNewRound()
             return
+        end
+
+        if onCooldown then
+            showGeneratorFailure(generatorId)
         end
         
         -- If this generator is on cooldown and it's the current one, close it
@@ -507,10 +637,10 @@ function GeneratorController:KnitStart()
     end)
     
     GeneratorService.GeneratorCompleted:Connect(function(generatorId: string)
-        print("[DEBUG] Generator completed signal received for:", generatorId, "roundTransitioning:", roundTransitioning)
-        
+        completedGenerators[generatorId] = true
+        refreshGeneratorHighlights()
+
         if roundTransitioning then
-            print("[DEBUG] Ignoring generator completion signal during round transition")
             return
         end
         
@@ -521,8 +651,13 @@ function GeneratorController:KnitStart()
     end)
     
     GeneratorService.ProgressSync:Connect(function(generatorId: string, progress: number)
-        if generatorId == currentGenerator and type(progress) == "number" then
+        if generatorId == "all" and type(progress) == "number" then
             setProgressBarImmediate(progress)
+            return
+        end
+
+        if generatorId == currentGenerator and type(progress) == "number" then
+            syncProgressBar(progress)
         end
     end)
     
@@ -532,6 +667,20 @@ function GeneratorController:KnitStart()
         if status == "Intermission" then
             self:ResetForNewRound()
         end
+    end)
+
+    CollectionService:GetInstanceAddedSignal("Generator"):Connect(function(generatorObject)
+        if RoleShowController and RoleShowController:IsKiller() then
+            getOrCreateGeneratorHighlight(generatorObject)
+        end
+    end)
+
+    CollectionService:GetInstanceRemovedSignal("Generator"):Connect(function(generatorObject)
+        removeGeneratorHighlight(generatorObject)
+    end)
+
+    RoleShowController:OnRoleChanged(function()
+        refreshGeneratorHighlights()
     end)
     
     local generatorFrame = screenGui:FindFirstChild("GeneratorFrame")
@@ -547,6 +696,8 @@ end
 
 function GeneratorController:KnitInit()
     GeneratorService = Knit.GetService("GeneratorService")
+    RoleShowController = Knit.GetController("RoleShowController")
+    NotificationController = Knit.GetController("NotificationController")
 end
 
 return GeneratorController

@@ -2,6 +2,10 @@ return {
     Coins = 10000,
     Shop = {},
     RestockTimer = 0,
+    MaxKillerPerkMana = 3,
+    MaxSurvivorPerkMana = 3,
+    OwnedKillerPerks = {},
+    OwnedSurvivorPerks = {},
     Perks = {
         Slot1 = {
             Name = "",

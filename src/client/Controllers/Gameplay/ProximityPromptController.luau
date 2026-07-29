@@ -19,6 +19,7 @@ local ProximityPromptController = Knit.CreateController({
 local promptConnections = {}
 local activePrompts = {}
 local createdPrompts = {}
+local NotificationController
 
 local function stylePrompt(prompt: ProximityPrompt, promptType: string)
     prompt.MaxActivationDistance = 10
@@ -43,6 +44,9 @@ local function onPromptTriggered(prompt: ProximityPrompt, player: Player, prompt
             GeneratorController:StartGenerator(object)
         else
             warn("GeneratorController not found")
+            if NotificationController then
+                NotificationController:ShowWarning("This interaction is unavailable right now.")
+            end
         end
     end
 end
@@ -143,6 +147,7 @@ end
 
 function ProximityPromptController:KnitInit()
     self:CleanupAllPrompts()
+    NotificationController = Knit.GetController("NotificationController")
 end
 
 return ProximityPromptController
